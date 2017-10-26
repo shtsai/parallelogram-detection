@@ -1,3 +1,9 @@
+/**
+ *  Computer Vision
+ *  Project 1
+ *  Shang-Hung Tsai
+ */
+ 
 #include<opencv2/core.hpp>
 #include<opencv2/imgcodecs.hpp>
 #include<opencv2/highgui.hpp>
@@ -10,7 +16,7 @@ using namespace cv;
 using namespace std;
 
 Mat convertToGrayScale(Mat mat);
-Mat mySobel(Mat mat);
+Mat mySobel(Mat mat, int threshold);
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
 Mat convertToGrayScale(Mat mat)
@@ -36,29 +42,51 @@ Mat convertToGrayScale(Mat mat)
     return gmat;
 }
 
-Mat mySobel(Mat mat) 
+/* This function applies Sobel's Operator on the input image,
+ * and normalize magnitude values to lie within range [0, 255].
+ * Finally it performs a thresholding. */
+Mat mySobel(Mat mat, int threshold) 
 {
     int nRows = mat.rows;
     int nCols = mat.cols;
+    int minM = INT_MAX;
+    int maxM = INT_MIN;
+    vector<vector<int> > M (nRows, vector<int>(nCols, 0));
     
-    vector<vector<int> > Gx(nRows, vector<int>(nCols, 0));
-    vector<vector<int> > Gy(nRows, vector<int>(nCols, 0));
-    
-    //    int Gx[nRows][nCols]; 
-//    int Gy[nRows][nCols]; 
-
     Mat gradient = Mat(nRows, nCols, CV_8UC1);
     
     for (int i = 1; i < nRows-1; i++) 
     {
 	for (int j = 1; j < nCols-1; j++) {
-	   Gx.at(i).at(j) = mat.at<uchar>(i-1,j+1)+2*mat.at<uchar>(i,j+1)+mat.at<uchar>(i+1,j+1)
-	              -mat.at<uchar>(i-1,j-1)-2*mat.at<uchar>(i,j-1)-mat.at<uchar>(i+1,j-1);
+	    int Gx = mat.at<uchar>(i-1,j+1)+2*mat.at<uchar>(i,j+1)+mat.at<uchar>(i+1,j+1)
+	                     -mat.at<uchar>(i-1,j-1)-2*mat.at<uchar>(i,j-1)-mat.at<uchar>(i+1,j-1);
 
-	   Gy.at(i).at(j) = mat.at<uchar>(i-1,j-1)+2*mat.at<uchar>(i-1,j)+mat.at<uchar>(i-1,j+1)
-	              -mat.at<uchar>(i+1,j-1)-2*mat.at<uchar>(i+1,j)-mat.at<uchar>(i+1,j+1);
+	    int Gy = mat.at<uchar>(i-1,j-1)+2*mat.at<uchar>(i-1,j)+mat.at<uchar>(i-1,j+1)
+	                     -mat.at<uchar>(i+1,j-1)-2*mat.at<uchar>(i+1,j)-mat.at<uchar>(i+1,j+1);
 
-	   gradient.at<uchar>(i,j) = sqrt(pow(Gx.at(i).at(j), 2) + pow(Gy.at(i).at(j), 2));
+	    M.at(i).at(j) = sqrt(pow(Gx, 2) + pow(Gy, 2));
+	    
+	    minM = min(minM, M.at(i).at(j));
+	    maxM = max(maxM, M.at(i).at(j));
+	}
+    }
+
+    cout << minM << endl;
+    cout << maxM << endl;
+    
+    // normalize magnitude values and perform thresholding
+    for (int i = 1; i < nRows-1; i++) 
+    {
+	for (int j = 1; j < nCols-1; j++) 
+	{
+	    int m = M.at(i).at(j);
+	    m = ((float) (m - minM) / (float) (maxM-minM)) * 255;
+//	    cout << m << endl;
+	    if (m > threshold) {
+		gradient.at<uchar>(i,j) = m;
+	    } else {
+		gradient.at<uchar>(i,j) = 0;
+	    }
 	}
     }
 
@@ -67,8 +95,8 @@ Mat mySobel(Mat mat)
 
 int main(int argc, char** argv) 
 {
-    String imageName("images/house.jpeg");  // file path
-    if (argc > 1) 
+    String imageName("images/house.jpeg");  // default image path
+    if (argc > 1)   // get image name 
     {
 	String one("1");
 	String two("2");
@@ -84,22 +112,28 @@ int main(int argc, char** argv)
 	} 
     }
 
-    Mat image = imread(imageName, IMREAD_COLOR);    // read file
+    // Initialize display window
+    namedWindow("Display window", WINDOW_AUTOSIZE); 
 
+    // Read image
+    Mat image = imread(imageName, IMREAD_COLOR);  
     if (image.empty()) 
     {
 	cout << "Could not open or find the image" << std::endl;
 	return -1;
     }
 
-    Mat gimage;
-    gimage = convertToGrayScale(image);
+    // Display original image
+    imshow("Display window", image);
+    waitKey(0);
 
-    namedWindow("Display window", WINDOW_AUTOSIZE); // create window for display
-//    imshow("Display window", gimage);	// show image inside window
-//    waitKey(0);
+    // Convert image to gray scale and display result
+    Mat gimage = convertToGrayScale(image);
+    imshow("Display window", gimage);
+    waitKey(0);
 
-    Mat gradient = mySobel(gimage);
+    // Apply Sobel operator and display result
+    Mat gradient = mySobel(gimage, 10);
     imshow("Display window", gradient);
     waitKey(0);
 
