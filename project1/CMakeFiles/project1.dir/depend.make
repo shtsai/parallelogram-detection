@@ -35,6 +35,7 @@ CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/core/types.hp
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/core/types_c.h
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/core/utility.hpp
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/core/version.hpp
+CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/core/vsx_utils.hpp
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/features2d.hpp
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/flann.hpp
 CMakeFiles/project1.dir/project1.cpp.o: /usr/local/include/opencv2/flann/all_indices.h

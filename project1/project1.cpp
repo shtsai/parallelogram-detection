@@ -12,11 +12,16 @@
 #include<string>
 #include<cmath>
 
+#define PI 3.1415926
+
 using namespace cv;
 using namespace std;
 
 Mat convertToGrayScale(Mat mat);
-Mat mySobel(Mat mat, int threshold);
+Mat mySobel(Mat mat);
+Mat myThresholding(Mat mat, int threshold);
+void myHoughTransform(Mat mat);
+
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
 Mat convertToGrayScale(Mat mat)
@@ -43,9 +48,8 @@ Mat convertToGrayScale(Mat mat)
 }
 
 /* This function applies Sobel's Operator on the input image,
- * and normalize magnitude values to lie within range [0, 255].
- * Finally it performs a thresholding. */
-Mat mySobel(Mat mat, int threshold) 
+ * and normalize magnitude values to lie within range [0, 255]. */
+Mat mySobel(Mat mat) 
 {
     int nRows = mat.rows;
     int nCols = mat.cols;
@@ -71,26 +75,70 @@ Mat mySobel(Mat mat, int threshold)
 	}
     }
 
-    cout << minM << endl;
-    cout << maxM << endl;
-    
-    // normalize magnitude values and perform thresholding
+    // normalize magnitude values 
     for (int i = 1; i < nRows-1; i++) 
     {
 	for (int j = 1; j < nCols-1; j++) 
 	{
-	    int m = M.at(i).at(j);
-	    m = ((float) (m - minM) / (float) (maxM-minM)) * 255;
-//	    cout << m << endl;
-	    if (m > threshold) {
-		gradient.at<uchar>(i,j) = m;
-	    } else {
-		gradient.at<uchar>(i,j) = 0;
-	    }
+	    gradient.at<uchar>(i,j) = ((float) (M.at(i).at(j) - minM) / (float) (maxM-minM)) * 255;
 	}
     }
 
     return gradient;
+}
+
+Mat myThresholding(Mat mat, int threshold) 
+{
+    for (int i = 0; i < mat.rows; i++) 
+    {
+	for (int j = 0; j < mat.cols; j++) 
+	{
+	    if (mat.at<uchar>(i,j)  > threshold) 
+	    {
+		mat.at<uchar>(i,j) = 0;
+	    } else {
+		mat.at<uchar>(i,j) = 255;
+	    }
+	}
+    }
+    return mat;
+}
+
+void myHoughTransform(Mat mat) 
+{
+    int angleStep = 2;
+    int pStep = 3;
+    int maxP = max(mat.rows, mat.cols) + 1;
+
+    vector< vector<int> > M (maxP/pStep, vector<int> (360/angleStep, 0));
+
+    cout << mat << endl;
+
+    for (int i = 0; i < mat.rows; i++) 
+    {
+	for (int j = 0; j < mat.cols; j++) 
+	{
+	    if (mat.at<uchar>(i, j) == 0) // edge pixel
+	    {
+		for (int angle = 0; angle < 360; angle += angleStep) 
+		{
+		    float p = -i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
+		    //  cout << cos(angle * PI / 180) << "+" << angle << " ";
+		    M.at(p/pStep).at(angle/angleStep) += 1;
+		}
+	    }
+	}
+    }
+/*
+    for (int i = 0; i < maxP/pStep; i++) 
+    {
+	for (int j = 0; j < 360/angleStep; j++) 
+	{
+	    cout << M.at(i).at(j) << " "; 
+	}
+	cout << "\n";
+    }
+    */
 }
 
 int main(int argc, char** argv) 
@@ -133,9 +181,17 @@ int main(int argc, char** argv)
     waitKey(0);
 
     // Apply Sobel operator and display result
-    Mat gradient = mySobel(gimage, 10);
+    Mat gradient = mySobel(gimage);
     imshow("Display window", gradient);
     waitKey(0);
+
+    // Thresholding
+    Mat edges = myThresholding(gradient, 20);
+    imshow("Display window", gradient);
+    waitKey(0);
+
+    // Hough Transform
+    myHoughTransform(edges); 
 
     return 0;
 }

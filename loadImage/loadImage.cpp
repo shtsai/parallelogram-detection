@@ -1,7 +1,7 @@
 #include<opencv2/core.hpp>
 #include<opencv2/imgcodecs.hpp>
 #include<opencv2/highgui.hpp>
-
+#include<opencv2/opencv.hpp>
 #include<iostream>
 #include<string>
 
@@ -36,13 +36,13 @@ Mat convertToGrayScale(Mat mat)
 
 int main(int argc, char** argv) 
 {
-    String imageName("../images/house.jpeg");  // file path
+    String imageName("Image1.jpg");  // file path
     if (argc > 1) 
     {
 	imageName = argv[1];
     }
 
-    Mat image = imread(imageName, IMREAD_COLOR);    // read file
+    Mat image = imread(imageName, CV_LOAD_IMAGE_GRAYSCALE);    // read file
 
     if (image.empty()) 
     {
@@ -50,12 +50,15 @@ int main(int argc, char** argv)
 	return -1;
     }
 
-    Mat gimage;
-    gimage = convertToGrayScale(image);
+    Mat simage;
+    cv::resize(image, simage, Size(), 0.05, 0.05);
+//    imwrite("small2.jpg", simage);
 
     namedWindow("Display window", WINDOW_AUTOSIZE); // create window for display
-    imshow("Display window", gimage);	// show image inside window
-
+    imshow("Display window", simage);	// show image inside window
     waitKey(0);
+
+    cout << simage << endl;
+
     return 0;
 }
