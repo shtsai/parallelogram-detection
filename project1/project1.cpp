@@ -111,7 +111,7 @@ void myHoughTransform(Mat mat)
     int maxP = max(mat.rows, mat.cols) + 1;
 
     vector< vector<int> > M (maxP/pStep, vector<int> (360/angleStep, 0));
-
+    cout << maxP/pStep << "+" << 360/angleStep << endl;
     cout << mat << endl;
 
     for (int i = 0; i < mat.rows; i++) 
@@ -123,8 +123,8 @@ void myHoughTransform(Mat mat)
 		for (int angle = 0; angle < 360; angle += angleStep) 
 		{
 		    float p = -i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
-		    //  cout << cos(angle * PI / 180) << "+" << angle << " ";
-		    M.at(p/pStep).at(angle/angleStep) += 1;
+		    cout << p << "+" << angle << " ";
+		  //  M.at(p/pStep).at(angle/angleStep) += 1;
 		}
 	    }
 	}
@@ -149,12 +149,18 @@ int main(int argc, char** argv)
 	String one("1");
 	String two("2");
 	String three("3");
+	String four("4");
+	String five("5");
 	if (one.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage1c.jpg";
 	} else if (two.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage2c.jpg";
 	} else if (three.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage3.jpg";
+	} else if (four.compare(argv[1]) == 0) {
+	    imageName = "images/small.jpg";
+	} else if (five.compare(argv[1]) == 0) {
+	    imageName = "images/small2.jpg";
 	} else {
 	    imageName = argv[1];	
 	} 
