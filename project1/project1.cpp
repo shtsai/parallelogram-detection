@@ -40,7 +40,7 @@ Mat convertToGrayScale(Mat mat)
 	{
 	    Vec3b pixel = mat.at<Vec3b>(i,j);
 	    // Use formula of luminance
-	    gmat.at<uchar>(i,j) = 0.3 * pixel[0] + 0.59 * pixel[1] + 0.11 * pixel[2]; 
+	    gmat.at<uchar>(i,j) = 0.3 * pixel[2] + 0.59 * pixel[1] + 0.11 * pixel[0]; 
 	}
     }
 
@@ -197,7 +197,7 @@ int main(int argc, char** argv)
     waitKey(0);
 
     // Hough Transform
-    myHoughTransform(edges); 
+    //myHoughTransform(edges); 
 
     return 0;
 }
