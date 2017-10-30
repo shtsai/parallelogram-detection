@@ -13,14 +13,17 @@
 #include<cmath>
 
 #define PI 3.1415926
+#define DISPLAY_IMAGE true 
 
 using namespace cv;
 using namespace std;
 
 Mat convertToGrayScale(Mat mat);
+Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
-void myHoughTransform(Mat mat);
+Mat myHoughTransform(Mat mat);
+void addLine(Mat mat, int p, int theta); 
 
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
@@ -31,7 +34,7 @@ Mat convertToGrayScale(Mat mat)
     int nRows = mat.rows;
     int nCols = mat.cols;
 
-    Mat gmat = Mat(nRows, nCols, CV_8UC1);
+    Mat gmat = Mat(nRows, nCols, CV_8UC1, 0.0);
     
     int i, j;
     for (i = 0; i < nRows; i++) 
@@ -47,8 +50,35 @@ Mat convertToGrayScale(Mat mat)
     return gmat;
 }
 
-/* This function applies Sobel's Operator on the input image,
- * and normalize magnitude values to lie within range [0, 255]. */
+/*
+ * This function enhances the contrast of an image by spread out gray value 
+ * distributions. Output image will use all 255 gray level values.
+ */
+Mat myEnhancer(Mat mat) 
+{
+    uchar maxp = 0;
+    uchar minp = 255;
+    
+    for (int i = 0; i < mat.rows; i++) {  // find max and min pixel value
+	for (int j = 0; j < mat.cols; j++) {
+	    maxp = max(maxp, mat.at<uchar>(i, j));
+	    minp = min(minp, mat.at<uchar>(i, j));
+	}
+    }
+
+    for (int i = 0; i < mat.rows; i++) {
+	for (int j = 0; j < mat.cols; j++) {
+	    mat.at<uchar>(i, j) = ((float) mat.at<uchar>(i,j)-minp) / (float) (maxp-minp) * 255;
+	}
+    } 
+
+    return mat;
+}
+
+/* 
+ * This function applies Sobel's Operator on the input image,
+ * and normalize magnitude values to lie within range [0, 255]. 
+ * */
 Mat mySobel(Mat mat) 
 {
     int nRows = mat.rows;
@@ -57,7 +87,7 @@ Mat mySobel(Mat mat)
     int maxM = INT_MIN;
     vector<vector<int> > M (nRows, vector<int>(nCols, 0));
     
-    Mat gradient = Mat(nRows, nCols, CV_8UC1);
+    Mat gradient = Mat(nRows, nCols, CV_8UC1, 0.0);
     
     for (int i = 1; i < nRows-1; i++) 
     {
@@ -87,6 +117,7 @@ Mat mySobel(Mat mat)
     return gradient;
 }
 
+/* This function performs thresholding on the given mat */
 Mat myThresholding(Mat mat, int threshold) 
 {
     for (int i = 0; i < mat.rows; i++) 
@@ -104,15 +135,21 @@ Mat myThresholding(Mat mat, int threshold)
     return mat;
 }
 
-void myHoughTransform(Mat mat) 
+/* 
+ * My implementation of Hough Transform.
+ * Here the angle is defined as the angle between perpendicular line 
+ * and the positve x axis, counter-clockwise.
+ * This is because we are using (i,j) coordinate system.
+ */
+Mat myHoughTransform(Mat mat) 
 {
     int angleStep = 2;
     int pStep = 3;
-    int maxP = max(mat.rows, mat.cols) + 1;
+    int maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
 
-    vector< vector<int> > M (maxP/pStep, vector<int> (360/angleStep, 0));
-    cout << maxP/pStep << "+" << 360/angleStep << endl;
-    cout << mat << endl;
+    vector< vector<int> > M (maxP*2/pStep+1, vector<int> (180/angleStep+1, 0));
+    // cout << maxP*2/pStep << endl;
+    // cout << mat << endl;
 
     for (int i = 0; i < mat.rows; i++) 
     {
@@ -120,25 +157,60 @@ void myHoughTransform(Mat mat)
 	{
 	    if (mat.at<uchar>(i, j) == 0) // edge pixel
 	    {
-		for (int angle = 0; angle < 360; angle += angleStep) 
+		for (int angle = 0; angle < 180; angle += angleStep) 
 		{
-		    float p = -i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
-		    cout << p << "+" << angle << " ";
-		  //  M.at(p/pStep).at(angle/angleStep) += 1;
+		    float p = i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
+		    // cout << p << "+" << angle << " ";
+		    M.at((p + maxP)/pStep).at(angle/angleStep) += 1;
 		}
 	    }
 	}
     }
-/*
-    for (int i = 0; i < maxP/pStep; i++) 
+
+    Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
+    vector< vector<int> >lines;
+    int maxcount = 0;
+    for (int i = 0; i < M.size(); i++) 
     {
-	for (int j = 0; j < 360/angleStep; j++) 
+	for (int j = 0; j < M.at(i).size(); j++) 
 	{
-	    cout << M.at(i).at(j) << " "; 
+	    maxcount = max(maxcount, M.at(i).at(j)); 
+	    if (M.at(i).at(j) >= 300) {
+		vector<int> param (2, 0);
+		param.at(0) = i * pStep - maxP;
+		param.at(1) = j * angleStep;
+		lines.push_back(param);
+		addLine(lineMat, param.at(0), param.at(1));
+	    }
 	}
-	cout << "\n";
     }
+    
+    cout << maxcount << endl;
+    
+    /*
+    for (int i = 0; i < lines.size(); i++) {
+	cout << lines.at(i).at(0) << "," << lines.at(i).at(1) << " ";
+    }
+    cout << endl;
     */
+
+    return lineMat;
+}
+
+/* 
+ * Given p and theta value, this function adds a line that satisfies the condition
+ * to the input mat.
+ */
+void addLine(Mat mat, int p, int theta) {
+    double COS = cos(theta * PI / 180);
+    double TAN = tan(theta * PI / 180);
+
+    for (int i = 0; i < mat.rows; i++) {
+	int j = (p / COS) - TAN * i;
+	if (j >= 0 && j < mat.cols) {
+	    mat.at<uchar>(i, j) = 255;
+	}
+    }
 }
 
 int main(int argc, char** argv) 
@@ -168,6 +240,7 @@ int main(int argc, char** argv)
 
     // Initialize display window
     namedWindow("Display window", WINDOW_AUTOSIZE); 
+    moveWindow("Display window", 20, 20);
 
     // Read image
     Mat image = imread(imageName, IMREAD_COLOR);  
@@ -177,27 +250,41 @@ int main(int argc, char** argv)
 	return -1;
     }
 
+
     // Display original image
-    imshow("Display window", image);
-    waitKey(0);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", image);
+	waitKey(0);
+    }
 
     // Convert image to gray scale and display result
     Mat gimage = convertToGrayScale(image);
-    imshow("Display window", gimage);
-    waitKey(0);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", gimage);
+	waitKey(0);
+	Mat enhanced = myEnhancer(gimage);
+	imshow("Display window", enhanced);
+	waitKey(0);
+    }
 
     // Apply Sobel operator and display result
     Mat gradient = mySobel(gimage);
-    imshow("Display window", gradient);
-    waitKey(0);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", gradient);
+	waitKey(0);
+    }
 
     // Thresholding
-    Mat edges = myThresholding(gradient, 20);
-    imshow("Display window", gradient);
-    waitKey(0);
+    Mat edges = myThresholding(gradient, 15);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", gradient);
+	waitKey(0);
+    }
 
     // Hough Transform
-    //myHoughTransform(edges); 
+    Mat lines = myHoughTransform(edges); 
+    imshow("Display window", lines);
+    waitKey(0);
 
     return 0;
 }
