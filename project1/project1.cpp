@@ -11,6 +11,7 @@
 #include<iostream>
 #include<string>
 #include<cmath>
+#include<unordered_map>
 
 #define PI 3.1415926
 #define DISPLAY_IMAGE true 
@@ -22,7 +23,7 @@ Mat convertToGrayScale(Mat mat);
 Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
-Mat myHoughTransform(Mat mat);
+unordered_map<int, vector<int> > myHoughTransform(Mat mat);
 void addLine(Mat mat, int p, int theta); 
 
 
@@ -141,8 +142,9 @@ Mat myThresholding(Mat mat, int threshold)
  * and the positve x axis, counter-clockwise.
  * This is because we are using (i,j) coordinate system.
  */
-Mat myHoughTransform(Mat mat) 
+unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
 {
+    bool display = false;
     int angleStep = 2;
     int pStep = 3;
     int maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
@@ -168,33 +170,43 @@ Mat myHoughTransform(Mat mat)
     }
 
     Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
-    vector< vector<int> >lines;
-    int maxcount = 0;
+//    vector< vector<int> >lines;
+    unordered_map<int, vector<int> > mp;
+
     for (int i = 0; i < M.size(); i++) 
     {
 	for (int j = 0; j < M.at(i).size(); j++) 
 	{
-	    maxcount = max(maxcount, M.at(i).at(j)); 
 	    if (M.at(i).at(j) >= 300) {
+		if (mp.find(j * angleStep) == mp.end()) {
+		    vector<int> v;
+		    mp[j * angleStep] = v;
+		}
+		
+		mp[j * angleStep].push_back(i * pStep - maxP);
+
+		/* add p and theta to a 2D vector
 		vector<int> param (2, 0);
 		param.at(0) = i * pStep - maxP;
 		param.at(1) = j * angleStep;
 		lines.push_back(param);
-		addLine(lineMat, param.at(0), param.at(1));
+		*/
+
+		/* add line to a mat for display purpose */
+		if (display) {
+		    addLine(lineMat, i * pStep - maxP, j * angleStep);
+		}
 	    }
 	}
     }
-    
-    cout << maxcount << endl;
-    
-    /*
-    for (int i = 0; i < lines.size(); i++) {
-	cout << lines.at(i).at(0) << "," << lines.at(i).at(1) << " ";
-    }
-    cout << endl;
-    */
 
-    return lineMat;
+    if (display) {
+	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+        moveWindow("Display window 2", 20, 20);
+        imshow("Display window 2", lineMat);
+    }
+
+    return mp;
 }
 
 /* 
@@ -282,9 +294,7 @@ int main(int argc, char** argv)
     }
 
     // Hough Transform
-    Mat lines = myHoughTransform(edges); 
-    imshow("Display window", lines);
-    waitKey(0);
+    unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
 
     return 0;
 }
