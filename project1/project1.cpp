@@ -6,6 +6,7 @@
  
 #include<opencv2/core.hpp>
 #include<opencv2/imgcodecs.hpp>
+#include<opencv2/imgproc/imgproc.hpp>
 #include<opencv2/highgui.hpp>
 
 #include<iostream>
@@ -14,7 +15,7 @@
 #include<unordered_map>
 
 #define PI 3.1415926
-#define DISPLAY_IMAGE false 
+#define DISPLAY_IMAGE true
 
 using namespace cv;
 using namespace std;
@@ -151,11 +152,13 @@ Mat myThresholding(Mat mat, int threshold)
 unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
 {
     bool display = true;
-    int angleStep = 3;
+    int angleStep = 4;
     int pStep = 3;
     int maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
 
     vector< vector<int> > M (maxP*2/pStep+1, vector<int> (180/angleStep+1, 0));
+    vector< vector<pair<int,int> > > points ((maxP*2/pStep+1) * (180/angleStep+1), vector<pair<int, int> > (0));
+
 
     for (int i = 0; i < mat.rows; i++) 
     {
@@ -168,7 +171,10 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 		{
 		    float p = i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
 		    // cout << p << "+" << angle << " ";
-		    M.at((p + maxP)/pStep).at( (int) angle/angleStep) += 1;
+		    // increment the corresponding accumulator
+		    M.at((p + maxP)/pStep).at((int) angle/angleStep) += 1;
+		    // add this point to the list for that line
+		    points.at(((p + maxP)/pStep)*(180/angleStep+1)+(int) angle/angleStep).push_back(make_pair(i,j));
 		}
 	    }
 	}
@@ -200,13 +206,26 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
 		if (localMaximum) 
 		{
-		
-		    if (mp.find(j * angleStep) == mp.end()) {
-			vector<int> v;
-			mp[j * angleStep] = v;
+		    cout << "For " << j * angleStep << ", " << i * pStep - maxP << endl;
+		    vector<pair<int, int> > x = points.at(i * M.at(i).size() + j);
+		    int disconnect = 0;
+		    for (int ii  = 0; ii < x.size()-1; ii++) {
+			if (abs(x[ii].first-x[ii+1].first) > 3 || abs(x[ii].second-x[ii+1].second > 3)) {
+			    disconnect++;	
+			}
+//			cout << x[ii].first << " " << x[ii].second << endl;
 		    }
+//		    cout << (float) disconnect/x.size() << endl;
+
+		    // only include lines that are dense enough
+		    if ((float) disconnect/x.size() > 0.3) {
+			if (mp.find(j * angleStep) == mp.end()) {
+			    vector<int> v;
+			    mp[j * angleStep] = v;
+			}
 		
-		    mp[j * angleStep].push_back(i * pStep - maxP);
+			mp[j * angleStep].push_back(i * pStep - maxP);
+		    }
 		}
 	    }
 	}
@@ -420,40 +439,43 @@ int main(int argc, char** argv)
 	cout << "Could not open or find the image" << std::endl;
 	return -1;
     }
-
-
     // Display original image
     if (DISPLAY_IMAGE) {
         imshow("Display window", image);
 	waitKey(0);
     }
-
     // Convert image to gray scale and display result
     Mat gimage = convertToGrayScale(image);
     if (DISPLAY_IMAGE) {
         imshow("Display window", gimage);
 	waitKey(0);
-	Mat enhanced = myEnhancer(gimage);
+    }
+    // Normalize intensity value to enhance contrast
+    Mat enhanced = myEnhancer(gimage);
+    if (DISPLAY_IMAGE) {
 	imshow("Display window", enhanced);
 	waitKey(0);
     }
-
+    Mat gaussian = Mat(enhanced.rows, enhanced.cols, CV_8UC1, 0.0);
+    GaussianBlur(enhanced, gaussian, Size(9, 9), 0, 0);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", gaussian);
+	waitKey(0);
+    }
     // Apply Sobel operator and display result
-    Mat gradient = mySobel(gimage);
+    Mat gradient = mySobel(enhanced);
     if (DISPLAY_IMAGE) {
         imshow("Display window", gradient);
 	waitKey(0);
     }
-
     // Thresholding
-    Mat edges = myThresholding(gradient, 15);
+    Mat edges = myThresholding(gradient, 11);
     if (DISPLAY_IMAGE) {
         imshow("Display window", gradient);
 	waitKey(0);
     }
-
     // Hough Transform
-    unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
+    //unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
 
     // Detect Parallelogram
     //detectParallelogram(lines, edges);
