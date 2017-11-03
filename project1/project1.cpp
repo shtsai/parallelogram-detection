@@ -24,7 +24,7 @@ Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
 unordered_map<int, vector<int> > myHoughTransform(Mat mat);
-void addLine(Mat mat, int p, int theta); 
+void addLine(Mat mat, int p, float theta); 
 void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges);
 bool checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, Mat mat); 
 bool findIntersection (int theta1, int p1, int theta2, int p2, Mat mat, vector<pair<int,int>> intersections, Mat pointMat);
@@ -151,7 +151,7 @@ Mat myThresholding(Mat mat, int threshold)
 unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
 {
     bool display = true;
-    int angleStep = 4;
+    int angleStep = 3;
     int pStep = 3;
     int maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
 
@@ -163,11 +163,12 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 	{
 	    if (mat.at<uchar>(i, j) == 0) // edge pixel
 	    {
-		for (int angle = 0; angle < 180; angle += angleStep) 
+		// angle is the mean value of each bin
+		for (float angle = angleStep/2; angle < 180; angle += angleStep) 
 		{
 		    float p = i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
 		    // cout << p << "+" << angle << " ";
-		    M.at((p + maxP)/pStep).at(angle/angleStep) += 1;
+		    M.at((p + maxP)/pStep).at( (int) angle/angleStep) += 1;
 		}
 	    }
 	}
@@ -179,13 +180,14 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
     {
 	for (int j = 1; j < M.at(i).size() - 1; j++) 
 	{
-	    if (M.at(i).at(j) >= 250) 
+	    if (M.at(i).at(j) >= 250)  // threshold for straight lines
 	    {
 		bool localMaximum = true;
 		for (int a = -4; a <= 4; a++) 
 		{
 		    for (int b = -4; b <= 4; b++)
 		    {
+			// check if this line is a local maximum
 			if (i+a >= 0 && i+a < M.size() && j+b >= 0 && j+b < M.at(i).size()
 			    && M.at(i+a).at(j+b) > M.at(i).at(j))
 			{
@@ -212,18 +214,18 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
     /* add line to a mat for display purpose */
     if (display) {
-	cout << "Dimension " << mat.rows << " * " << mat.cols << endl;
+//	cout << "Dimension " << mat.rows << " * " << mat.cols << endl;
 	Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
 	for (auto it : mp)
 	{
 	    vector<int> list = it.second;
-	    if (list.size() < 2) 
+	    if (list.size() < 2)  // must have at least two lines 
 	    {
 		continue;
 	    }
 	    for (int i = 0; i < list.size(); i++) 
 	    {
-		addLine(lineMat, list.at(i), it.first);
+		addLine(lineMat, list.at(i), it.first + angleStep/2);
 	    }
 	}
 
@@ -240,7 +242,7 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
  * Given p and theta value, this function adds a line that satisfies the condition
  * to the input mat.
  */
-void addLine(Mat mat, int p, int theta) 
+void addLine(Mat mat, int p, float theta) 
 {
     double COS = cos(theta * PI / 180);
     double TAN = tan(theta * PI / 180);
@@ -454,7 +456,7 @@ int main(int argc, char** argv)
     unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
 
     // Detect Parallelogram
-    detectParallelogram(lines, edges);
+    //detectParallelogram(lines, edges);
     
 
     return 0;
