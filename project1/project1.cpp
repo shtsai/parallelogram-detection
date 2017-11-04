@@ -16,6 +16,8 @@
 
 #define PI 3.1415926
 #define DISPLAY_IMAGE true
+#define ANGLESTEP 5
+#define PSTEP 3
 
 using namespace cv;
 using namespace std;
@@ -26,10 +28,14 @@ Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
 unordered_map<int, vector<int> > myHoughTransform(Mat mat);
 void addLine(Mat mat, int p, float theta); 
-void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges);
-bool checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, Mat mat); 
-bool findIntersection (int theta1, int p1, int theta2, int p2, Mat mat, vector<pair<int,int>> intersections, Mat pointMat);
+void addLineByPoints(Mat mat, int index, vector< vector<pair<int,int> > > points); 
+void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points);
+vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points); 
+bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat);
 
+int maxP;
+int cols;
+int rows;
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
 Mat convertToGrayScale(Mat mat)
@@ -151,14 +157,11 @@ Mat myThresholding(Mat mat, int threshold)
  */
 unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
 {
-    bool display = true;
-    int angleStep = 4;
-    int pStep = 3;
-    int maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
+    bool display = false;
+    maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
 
-    vector< vector<int> > M (maxP*2/pStep+1, vector<int> (180/angleStep+1, 0));
-    vector< vector<pair<int,int> > > points ((maxP*2/pStep+1) * (180/angleStep+1), vector<pair<int, int> > (0));
-
+    vector< vector<int> > M (maxP*2/PSTEP+1, vector<int> (180/ANGLESTEP+1, 0));
+    vector< vector<pair<int,int> > > points ((maxP*2/PSTEP+1) * (180/ANGLESTEP+1), vector<pair<int, int> > (0));
 
     for (int i = 0; i < mat.rows; i++) 
     {
@@ -167,21 +170,20 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 	    if (mat.at<uchar>(i, j) == 0) // edge pixel
 	    {
 		// angle is the mean value of each bin
-		for (float angle = angleStep/2; angle < 180; angle += angleStep) 
+		for (float angle = ANGLESTEP/2; angle < 180; angle += ANGLESTEP) 
 		{
 		    float p = i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
 		    // cout << p << "+" << angle << " ";
 		    // increment the corresponding accumulator
-		    M.at((p + maxP)/pStep).at((int) angle/angleStep) += 1;
+		    M.at((p + maxP)/PSTEP).at((int) angle/ANGLESTEP) += 1;
 		    // add this point to the list for that line
-		    points.at(((p + maxP)/pStep)*(180/angleStep+1)+(int) angle/angleStep).push_back(make_pair(i,j));
+		    points.at(((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP).push_back(make_pair(i,j));
 		}
 	    }
 	}
     }
 
     unordered_map<int, vector<int> > mp;
-
     for (int i = 1; i < M.size() - 1; i++) 
     {
 	for (int j = 1; j < M.at(i).size() - 1; j++) 
@@ -206,7 +208,7 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
 		if (localMaximum) 
 		{
-		    cout << "For " << j * angleStep << ", " << i * pStep - maxP << endl;
+//		    cout << "For " << j * ANGLESTEP << ", " << i * PSTEP - maxP << endl;
 		    vector<pair<int, int> > x = points.at(i * M.at(i).size() + j);
 		    int disconnect = 0;
 		    for (int ii  = 0; ii < x.size()-1; ii++) {
@@ -219,12 +221,12 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
 		    // only include lines that are dense enough
 		    if ((float) disconnect/x.size() > 0.3) {
-			if (mp.find(j * angleStep) == mp.end()) {
+			if (mp.find(j * ANGLESTEP) == mp.end()) {
 			    vector<int> v;
-			    mp[j * angleStep] = v;
+			    mp[j * ANGLESTEP] = v;
 			}
 		
-			mp[j * angleStep].push_back(i * pStep - maxP);
+			mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
 		    }
 		}
 	    }
@@ -233,18 +235,20 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
     /* add line to a mat for display purpose */
     if (display) {
-//	cout << "Dimension " << mat.rows << " * " << mat.cols << endl;
 	Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
 	for (auto it : mp)
 	{
 	    vector<int> list = it.second;
-	    if (list.size() < 2)  // must have at least two lines 
+	    if (list.size() < 2)  // must have at least two lines with the same theta
 	    {
 		continue;
 	    }
 	    for (int i = 0; i < list.size(); i++) 
 	    {
-		addLine(lineMat, list.at(i), it.first + angleStep/2);
+		int p = list.at(i);
+		float angle = it.first + ANGLESTEP/2;
+//		addLine(lineMat, p, angle);
+		addLineByPoints(lineMat, ((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP, points);
 	    }
 	}
 
@@ -254,7 +258,25 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 	waitKey(0);
     }
 
+    detectParallelogram(mp, points);
+
     return mp;
+}
+
+/*
+ * This is function plots all the edge points corresponding to a line on a Mat.
+ */
+void addLineByPoints(Mat mat, int index, vector< vector<pair<int,int> > > points) {
+    vector<pair<int, int> > point = points.at(index);
+    for (int i = 0; i < point.size()-1; i++) {
+	int x = point.at(i).first;
+	int y = point.at(i).second;
+	int x2 = point.at(i+1).first;
+	int y2 = point.at(i+1).second;
+//	if (abs(x-x2) < 10 && abs(y-y2) < 10) {
+	    mat.at<uchar>(x, y) = 255;
+//	}
+    }
 }
 
 /* 
@@ -274,9 +296,8 @@ void addLine(Mat mat, int p, float theta)
     }
 }
 
-void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges) 
+void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points) 
 {   
-
     // put all angles in an vector
     vector<int> angles;
     for (unordered_map<int, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
@@ -290,6 +311,7 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges)
 	*/
 	angles.push_back(it->first);
     }
+    vector<vector<pair<int, int> > > intersections;
 
     for (int a1 = 0; a1 < angles.size(); a1++) {  // first angle
 	for (int a2 = a1 + 1; a2 < angles.size(); a2++) { // second angle 
@@ -304,8 +326,11 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges)
 			    int a2p1v = lines[theta2].at(a2p1);
 			    int a2p2v = lines[theta2].at(a2p2);
 
-			    if (checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, edges)) {
+			    vector<pair<int,int> > intersection = checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, points);
+			    cout << intersection.size() << endl;
+			    if (intersection.size() == 4) {
 				cout << "Find parallelogram" << endl;
+				intersections.push_back(intersection);
 			    }
 			}
 		    }
@@ -313,48 +338,66 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, Mat edges)
 	    }
 	}
     }
+
+    Mat lineMat = Mat(rows, cols, CV_8UC1, 255.0);
+    for (int i = 0; i < intersections.size(); i++) {
+	vector<pair<int, int>> parallel = intersections.at(i);
+	for (int j = 0; j < parallel.size(); j++) {
+	    for (int k = j + 1; k < parallel.size(); k++) {
+		pair<int, int> p = parallel.at(j);
+		pair<int, int> p2 = parallel.at(k);
+		cout << p.first << " " << p.second << endl;
+		line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
+	    }
+	}
+    }
+   
+	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+        moveWindow("Display window 2", 20, 20);
+        imshow("Display window 2", lineMat);
+	waitKey(0);
 }
 
-bool checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, Mat mat) 
+vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points) 
 {
-    Mat pointMat = Mat(mat.rows, mat.cols, CV_8UC1, 255.0);
+    vector<pair<int, int> > intersection;
+    Mat pointMat = Mat(rows, cols, CV_8UC1, 255.0);
     
-    vector<pair<int,int> > intersections;
 
-    if (!findIntersection(theta1, a1p1, theta2, a2p1, mat, intersections, pointMat)) {
-	return false;
+    if (!findIntersection(theta1, a1p1, theta2, a2p1, intersection, points, pointMat)) {
+	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p1, theta2, a2p2, mat, intersections, pointMat)) {
-	return false;
+    if (!findIntersection(theta1, a1p1, theta2, a2p2, intersection, points, pointMat)) {
+	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p2, theta2, a2p1, mat, intersections, pointMat)) {
-	return false;
+    if (!findIntersection(theta1, a1p2, theta2, a2p1, intersection, points, pointMat)) {
+	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p2, theta2, a2p2, mat, intersections, pointMat)) {
-	return false;
+    if (!findIntersection(theta1, a1p2, theta2, a2p2, intersection, points, pointMat)) {
+	intersection.clear();
     }
 
-    if (true) {
+    if (false) {
 	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
         moveWindow("Display window 2", 20, 20);
         imshow("Display window 2", pointMat);
 	waitKey(0);
     }
 
-   /* 
-    if (intersections.size() > 0) {
-    for (int i = 0; i < intersections.size(); i++) {
-	pair<int, int> p = intersections.at(i);
+    /*
+    if (intersection.size() > 0) {
+    for (int i = 0; i < intersection.size(); i++) {
+	pair<int, int> p = intersection.at(i);
 	cout << p.first << " + " << p.second << endl;
     }
     cout << endl;
     }
     */
-    
-    return true;
+   
+    return intersection;
 }
 
-bool findIntersection (int theta1, int p1, int theta2, int p2, Mat mat, vector<pair<int,int>> intersections, Mat pointMat)
+bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat)
 {
     double i, j;
     int inti, intj;
@@ -365,17 +408,28 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, Mat mat, vector<p
 
     inti = (int) i;
     intj = (int) j;
-    bool found = false;
+    bool found1 = false;
+    bool found2= false;
 
-    // add points to the mat for display purpose
-    cout << inti << " + " << intj << endl;
-    for (int a = -2; a <= 2; a++) {
-	for (int b = -2; b <= 2; b++) {
-	    pointMat.at<uchar>(inti+a, intj+b) = 0;
+    int index1 = ((p1 + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) theta1/ANGLESTEP;
+    int index2 = ((p2 + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) theta2/ANGLESTEP;
+    vector<pair<int,int> > point1 = points.at(index1);
+    vector<pair<int,int> > point2 = points.at(index2);
+    for (int i = 0; i < point1.size(); i++) {
+	pair<int,int> pair1 = point1.at(i);
+	if (abs(pair1.first - inti) < 100 && abs(pair1.second - intj) < 100) {
+	    found1 = true;
+	    break;
 	}
     }
-
-
+    for (int i = 0; i < point2.size(); i++) {
+	pair<int,int> pair2 = point2.at(i);
+	if (abs(pair2.first - inti) < 100 && abs(pair2.second - intj) < 100) {
+	    found2 = true;
+	    break;
+	}
+    }
+/*
     for (int a = -10; a <= 10; a++)  // check 5 * 5 surrounding pixels
     {
 	for (int b = -10; b <= 10; b++) 
@@ -394,13 +448,26 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, Mat mat, vector<p
 	    }
 	}
     }
+ */
 //    cout << endl;
 
-    if (found) {
+    if (found1 && found2) {
+	/*	
+	// add points to the mat for display purpose
+        cout << inti << " + " << intj << endl;
+	for (int a = -2; a <= 2; a++) {
+	    for (int b = -2; b <= 2; b++) {
+		pointMat.at<uchar>(inti+a, intj+b) = 0;
+	    }
+        }
+	*/
+	cout << "found" << endl;
+	cout << inti << " " << intj << endl;
 	pair<int, int> point (inti, intj);
-	intersections.push_back(point);
+	intersection.push_back(point);
 	return true;
     }
+    return false;
 }
 
 int main(int argc, char** argv) 
@@ -439,6 +506,8 @@ int main(int argc, char** argv)
 	cout << "Could not open or find the image" << std::endl;
 	return -1;
     }
+    rows = image.rows;
+    cols = image.cols;
     // Display original image
     if (DISPLAY_IMAGE) {
         imshow("Display window", image);
@@ -475,10 +544,9 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     // Hough Transform
-    //unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
+    unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
 
     // Detect Parallelogram
-    //detectParallelogram(lines, edges);
     
 
     return 0;
