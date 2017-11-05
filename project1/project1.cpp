@@ -17,7 +17,7 @@
 #define PI 3.1415926
 #define DISPLAY_IMAGE true
 #define ANGLESTEP 3
-#define PSTEP 1
+#define PSTEP 2
 
 using namespace cv;
 using namespace std;
@@ -176,17 +176,37 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 		    // cout << p << "+" << angle << " ";
 		    // increment the corresponding accumulator
 		    M.at((p + maxP)/PSTEP).at((int) angle/ANGLESTEP) += 1;
-		    // add this point to the list for that line
-		    points.at(((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP).push_back(make_pair(i,j));
+		    // add this point to the list for that line					// j = x, i = y
+		    points.at(((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP).push_back(make_pair(j,i));
 		}
 	    }
 	}
     }
 
+    // Display accumulator graphically
+    int maxAcc = INT_MIN;
+    int minAcc = INT_MAX;
+    Mat accumulator = Mat(maxP*2/PSTEP+1, 180/ANGLESTEP+1, CV_8UC1, 0.0);
+    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
+	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
+	    maxAcc = max(maxAcc, M.at(i).at(j));
+	    minAcc = min(minAcc, M.at(i).at(j));
+	}
+    }
+    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
+	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
+	    accumulator.at<uchar>(i,j) = ((float) (M.at(i).at(j) - minAcc) / (maxAcc-minAcc)) * 255;
+	}
+    }
+    namedWindow("Accumulator", WINDOW_AUTOSIZE); 
+    moveWindow("Accumulator", 200, 20);
+    imshow("Accumulator", accumulator);
+    waitKey(0);
+
     unordered_map<int, vector<int> > mp;
-    for (int i = 1; i < M.size() - 1; i++) 
+    for (int i = 0; i < M.size(); i++) 
     {
-	for (int j = 1; j < M.at(i).size() - 1; j++) 
+	for (int j = 0; j < M.at(i).size(); j++) 
 	{
 	    if (M.at(i).at(j) >= 250)  // threshold for straight lines
 	    {
@@ -263,8 +283,7 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
 	}
     }
-
-//    detectParallelogram(mp, points);
+    //detectParallelogram(mp, points);
 
     return mp;
 }

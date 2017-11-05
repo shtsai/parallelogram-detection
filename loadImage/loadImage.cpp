@@ -60,5 +60,10 @@ int main(int argc, char** argv)
 
     cout << simage << endl;
 
+    Mat drawline = Mat(300, 300, CV_8UC1, 255.0);
+    line(drawline, Point(0, 20), Point(100, 100), Scalar(0), 2, 8);
+    imshow("Display window", drawline);	// show image inside window
+    waitKey(0);
+
     return 0;
 }
