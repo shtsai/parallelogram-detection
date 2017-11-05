@@ -16,8 +16,8 @@
 
 #define PI 3.1415926
 #define DISPLAY_IMAGE true
-#define ANGLESTEP 5
-#define PSTEP 3
+#define ANGLESTEP 3
+#define PSTEP 1
 
 using namespace cv;
 using namespace std;
@@ -208,6 +208,8 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 
 		if (localMaximum) 
 		{
+		    mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
+		    /*
 //		    cout << "For " << j * ANGLESTEP << ", " << i * PSTEP - maxP << endl;
 		    vector<pair<int, int> > x = points.at(i * M.at(i).size() + j);
 		    int disconnect = 0;
@@ -228,37 +230,41 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 		
 			mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
 		    }
+		    */
 		}
 	    }
 	}
     }
 
     /* add line to a mat for display purpose */
-    if (display) {
-	Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
+    if (true) {
 	for (auto it : mp)
 	{
 	    vector<int> list = it.second;
+/*
 	    if (list.size() < 2)  // must have at least two lines with the same theta
 	    {
 		continue;
 	    }
+	    */
 	    for (int i = 0; i < list.size(); i++) 
 	    {
 		int p = list.at(i);
 		float angle = it.first + ANGLESTEP/2;
 //		addLine(lineMat, p, angle);
+		
+		Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
 		addLineByPoints(lineMat, ((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP, points);
+		namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+		moveWindow("Display window 2", 20, 20);
+		imshow("Display window 2", lineMat);
+		waitKey(0);
 	    }
-	}
 
-	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-        moveWindow("Display window 2", 20, 20);
-        imshow("Display window 2", lineMat);
-	waitKey(0);
+	}
     }
 
-    detectParallelogram(mp, points);
+//    detectParallelogram(mp, points);
 
     return mp;
 }
