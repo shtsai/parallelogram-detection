@@ -1,0 +1,133 @@
+
+unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
+{
+    bool display = false;
+    maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
+
+    vector< vector<int> > M (maxP*2/PSTEP+1, vector<int> (180/ANGLESTEP+1, 0));
+    vector< vector<pair<int,int> > > points ((maxP*2/PSTEP+1) * (180/ANGLESTEP+1), vector<pair<int, int> > (0));
+
+    for (int i = 0; i < mat.rows; i++) 
+    {
+	for (int j = 0; j < mat.cols; j++) 
+	{
+	    if (mat.at<uchar>(i, j) == 0) // edge pixel
+	    {
+		// angle is the mean value of each bin
+		for (float angle = ANGLESTEP/2; angle < 180; angle += ANGLESTEP) 
+		{
+		    float p = i * sin((float) angle * PI / 180) + j * cos((float) angle * PI / 180);
+		    // cout << p << "+" << angle << " ";
+		    // increment the corresponding accumulator
+		    M.at(round((p + maxP)/PSTEP)).at(round(angle/ANGLESTEP)) += 1;
+		    // add this point to the list for that line					// j = x, i = y
+		    points.at(((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP).push_back(make_pair(j,i));
+		}
+	    }
+	}
+    }
+
+    // Display accumulator graphically
+    int maxAcc = INT_MIN;
+    int minAcc = INT_MAX;
+    Mat accumulator = Mat(maxP*2/PSTEP+1, 180/ANGLESTEP+1, CV_8UC1, 0.0);
+    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
+	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
+	    maxAcc = max(maxAcc, M.at(i).at(j));
+	    minAcc = min(minAcc, M.at(i).at(j));
+	}
+    }
+    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
+	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
+	    accumulator.at<uchar>(i,j) = ((float) (M.at(i).at(j) - minAcc) / (maxAcc-minAcc)) * 255;
+	}
+    }
+    namedWindow("Accumulator", WINDOW_AUTOSIZE); 
+    moveWindow("Accumulator", 200, 20);
+    imshow("Accumulator", accumulator);
+    waitKey(0);
+
+    unordered_map<int, vector<int> > mp;
+    for (int i = 0; i < M.size(); i++) 
+    {
+	for (int j = 0; j < M.at(i).size(); j++) 
+	{
+	    if (M.at(i).at(j) >= 250)  // threshold for straight lines
+	    {
+		bool localMaximum = true;
+		for (int a = -4; a <= 4; a++) 
+		{
+		    for (int b = -4; b <= 4; b++)
+		    {
+			// check if this line is a local maximum
+			if (i+a >= 0 && i+a < M.size() && j+b >= 0 && j+b < M.at(i).size()
+			    && M.at(i+a).at(j+b) > M.at(i).at(j))
+			{
+			    localMaximum = false;
+			    break;
+			}
+		    }
+		    if (!localMaximum) break;
+		}
+
+		if (localMaximum) 
+		{
+		    mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
+		    /*
+//		    cout << "For " << j * ANGLESTEP << ", " << i * PSTEP - maxP << endl;
+		    vector<pair<int, int> > x = points.at(i * M.at(i).size() + j);
+		    int disconnect = 0;
+		    for (int ii  = 0; ii < x.size()-1; ii++) {
+			if (abs(x[ii].first-x[ii+1].first) > 3 || abs(x[ii].second-x[ii+1].second > 3)) {
+			    disconnect++;	
+			}
+//			cout << x[ii].first << " " << x[ii].second << endl;
+		    }
+//		    cout << (float) disconnect/x.size() << endl;
+
+		    // only include lines that are dense enough
+		    if ((float) disconnect/x.size() > 0.3) {
+			if (mp.find(j * ANGLESTEP) == mp.end()) {
+			    vector<int> v;
+			    mp[j * ANGLESTEP] = v;
+			}
+		
+			mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
+		    }
+		    */
+		}
+	    }
+	}
+    }
+
+    /* add line to a mat for display purpose */
+    if (true) {
+	for (auto it : mp)
+	{
+	    vector<int> list = it.second;
+/*
+	    if (list.size() < 2)  // must have at least two lines with the same theta
+	    {
+		continue;
+	    }
+	    */
+	    for (int i = 0; i < list.size(); i++) 
+	    {
+		int p = list.at(i);
+		float angle = it.first + ANGLESTEP/2;
+//		addLine(lineMat, p, angle);
+		
+		Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
+		addLineByPoints(lineMat, ((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP, points);
+		namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+		moveWindow("Display window 2", 20, 20);
+		imshow("Display window 2", lineMat);
+		waitKey(0);
+	    }
+
+	}
+    }
+    //detectParallelogram(mp, points);
+
+    return mp;
+}

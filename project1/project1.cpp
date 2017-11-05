@@ -16,8 +16,8 @@
 
 #define PI 3.1415926
 #define DISPLAY_IMAGE true
-#define ANGLESTEP 3
-#define PSTEP 2
+#define ANGLESTEP 3.0
+#define PSTEP 3.0
 
 using namespace cv;
 using namespace std;
@@ -26,9 +26,9 @@ Mat convertToGrayScale(Mat mat);
 Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
-unordered_map<int, vector<int> > myHoughTransform(Mat mat);
-void addLine(Mat mat, int p, float theta); 
-void addLineByPoints(Mat mat, int index, vector< vector<pair<int,int> > > points); 
+void myHoughTransform(Mat mat);
+void addLine(Mat mat, int p, float theta, int x_cen, int y_cen); 
+void addLineByPoints(Mat mat, vector<pair<int,int> >  points); 
 void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points);
 vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points); 
 bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat);
@@ -155,70 +155,73 @@ Mat myThresholding(Mat mat, int threshold)
  * This function returns an unorder map, where key is theta and value is a
  * list of p values. 
  */
-unordered_map<int, vector<int> > myHoughTransform(Mat mat) 
+
+void myHoughTransform(Mat mat)
 {
-    bool display = false;
-    maxP = sqrt(pow(mat.rows,2) + pow(mat.cols, 2));
+    int maxP = sqrt(pow(rows, 2) + pow(cols, 2));
+    int psize = maxP * 2 / PSTEP;
+    int anglesize = 180/ANGLESTEP;
+    int* accumulator = new int[psize * anglesize];
+    vector<pair<int,int> >* points = new vector<pair<int, int> >[psize * anglesize];
+    
+    for (int i = 0; i < psize; i++) {
+	for (int j = 0; j < anglesize; j++) {
+	    accumulator[i * anglesize + j] = 0;
+	}
+    }
 
-    vector< vector<int> > M (maxP*2/PSTEP+1, vector<int> (180/ANGLESTEP+1, 0));
-    vector< vector<pair<int,int> > > points ((maxP*2/PSTEP+1) * (180/ANGLESTEP+1), vector<pair<int, int> > (0));
+    /*
+    for (float theta = ANGLESTEP/2; theta < 180; theta += ANGLESTEP) {
+	float p = 5 * cos(theta * PI / 180) + 8 * sin(theta * PI / 180);
+	int pindex = (p + maxP) / PSTEP;
+	int tindex = theta/ANGLESTEP;
 
-    for (int i = 0; i < mat.rows; i++) 
-    {
-	for (int j = 0; j < mat.cols; j++) 
-	{
-	    if (mat.at<uchar>(i, j) == 0) // edge pixel
-	    {
-		// angle is the mean value of each bin
-		for (float angle = ANGLESTEP/2; angle < 180; angle += ANGLESTEP) 
-		{
-		    float p = i * sin(angle * PI / 180) + j * cos(angle * PI / 180);
-		    // cout << p << "+" << angle << " ";
-		    // increment the corresponding accumulator
-		    M.at((p + maxP)/PSTEP).at((int) angle/ANGLESTEP) += 1;
-		    // add this point to the list for that line					// j = x, i = y
-		    points.at(((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP).push_back(make_pair(j,i));
+	cout << theta << " + " << p << endl;
+	cout << pindex << " - " << tindex << endl;
+	cout << pindex * anglesize + tindex << endl;
+
+
+	accumulator[pindex * anglesize + tindex]++;
+    }
+
+    cout << psize << " " << anglesize << endl;
+    for (int i = 0; i < psize; i++) {
+	for (int j = 0; j < anglesize; j++) {
+	    cout << accumulator[i * anglesize + j] << " ";
+	}
+	cout << endl;
+    }
+    */
+
+    for (int y = 0; y < mat.rows; y++) {
+	for (int x = 0; x < mat.cols; x++) {
+	    if (mat.at<uchar>(y, x) == 0) {  // edge point
+		for (float theta = ANGLESTEP/2; theta < 180; theta += ANGLESTEP) {
+		    float p = x * cos(theta * PI / 180) + y * sin(theta * PI / 180);
+		    int pindex = (p + maxP) / PSTEP;
+		    int tindex = theta/ANGLESTEP;
+		    accumulator[pindex * anglesize + tindex]++;
+		    points[pindex * anglesize + tindex].push_back(make_pair(y, x));
 		}
 	    }
 	}
     }
 
-    // Display accumulator graphically
-    int maxAcc = INT_MIN;
-    int minAcc = INT_MAX;
-    Mat accumulator = Mat(maxP*2/PSTEP+1, 180/ANGLESTEP+1, CV_8UC1, 0.0);
-    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
-	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
-	    maxAcc = max(maxAcc, M.at(i).at(j));
-	    minAcc = min(minAcc, M.at(i).at(j));
+    for (int i = 0; i < psize; i++) {
+	for (int j = 0; j < anglesize; j++) {
+	    cout << accumulator[i * anglesize + j] << " ";
 	}
+	cout << endl;
     }
-    for (int i = 0; i < maxP*2/PSTEP+1; i++) {
-	for (int j = 0; j < 180/ANGLESTEP+1; j++) {
-	    accumulator.at<uchar>(i,j) = ((float) (M.at(i).at(j) - minAcc) / (maxAcc-minAcc)) * 255;
-	}
-    }
-    namedWindow("Accumulator", WINDOW_AUTOSIZE); 
-    moveWindow("Accumulator", 200, 20);
-    imshow("Accumulator", accumulator);
-    waitKey(0);
 
-    unordered_map<int, vector<int> > mp;
-    for (int i = 0; i < M.size(); i++) 
-    {
-	for (int j = 0; j < M.at(i).size(); j++) 
-	{
-	    if (M.at(i).at(j) >= 250)  // threshold for straight lines
-	    {
+    Mat lineMat = Mat(rows, cols, CV_8UC1, 0.0);
+    for (int i = 0; i < psize; i++) {
+	for (int j = 0; j < anglesize; j++) {
+	    if (accumulator[i * anglesize + j] > 300) {
 		bool localMaximum = true;
-		for (int a = -4; a <= 4; a++) 
-		{
-		    for (int b = -4; b <= 4; b++)
-		    {
-			// check if this line is a local maximum
-			if (i+a >= 0 && i+a < M.size() && j+b >= 0 && j+b < M.at(i).size()
-			    && M.at(i+a).at(j+b) > M.at(i).at(j))
-			{
+		for (int a = -4; a <= 4; a++) {
+		    for (int b = -4; b <= 4; b++) {
+			if (i+a >= 0 && i+a < psize && j+b >= 0 && j+b < anglesize && accumulator[i*anglesize+j] < accumulator[(i+a)*anglesize + (j+b)]) {
 			    localMaximum = false;
 			    break;
 			}
@@ -226,81 +229,34 @@ unordered_map<int, vector<int> > myHoughTransform(Mat mat)
 		    if (!localMaximum) break;
 		}
 
-		if (localMaximum) 
-		{
-		    mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
-		    /*
-//		    cout << "For " << j * ANGLESTEP << ", " << i * PSTEP - maxP << endl;
-		    vector<pair<int, int> > x = points.at(i * M.at(i).size() + j);
-		    int disconnect = 0;
-		    for (int ii  = 0; ii < x.size()-1; ii++) {
-			if (abs(x[ii].first-x[ii+1].first) > 3 || abs(x[ii].second-x[ii+1].second > 3)) {
-			    disconnect++;	
-			}
-//			cout << x[ii].first << " " << x[ii].second << endl;
-		    }
-//		    cout << (float) disconnect/x.size() << endl;
-
-		    // only include lines that are dense enough
-		    if ((float) disconnect/x.size() > 0.3) {
-			if (mp.find(j * ANGLESTEP) == mp.end()) {
-			    vector<int> v;
-			    mp[j * ANGLESTEP] = v;
-			}
-		
-			mp[j * ANGLESTEP].push_back(i * PSTEP - maxP);
-		    }
-		    */
+		if (localMaximum) {
+//		    addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2, x_cen, y_cen);
+		    lineMat = Mat(rows, cols, CV_8UC1, 0.0);
+		    addLineByPoints(lineMat, points[i * anglesize + j]);
+		    
+    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+    moveWindow("Display window 2", 20, 20);
+    imshow("Display window 2", lineMat);
+    waitKey(0);
 		}
+
 	    }
 	}
     }
-
-    /* add line to a mat for display purpose */
-    if (true) {
-	for (auto it : mp)
-	{
-	    vector<int> list = it.second;
-/*
-	    if (list.size() < 2)  // must have at least two lines with the same theta
-	    {
-		continue;
-	    }
-	    */
-	    for (int i = 0; i < list.size(); i++) 
-	    {
-		int p = list.at(i);
-		float angle = it.first + ANGLESTEP/2;
-//		addLine(lineMat, p, angle);
-		
-		Mat lineMat = Mat(mat.rows, mat.cols, CV_8UC1, 0.0);
-		addLineByPoints(lineMat, ((p + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) angle/ANGLESTEP, points);
-		namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-		moveWindow("Display window 2", 20, 20);
-		imshow("Display window 2", lineMat);
-		waitKey(0);
-	    }
-
-	}
-    }
-    //detectParallelogram(mp, points);
-
-    return mp;
+    delete accumulator;
 }
+
+
+
 
 /*
  * This is function plots all the edge points corresponding to a line on a Mat.
  */
-void addLineByPoints(Mat mat, int index, vector< vector<pair<int,int> > > points) {
-    vector<pair<int, int> > point = points.at(index);
-    for (int i = 0; i < point.size()-1; i++) {
-	int x = point.at(i).first;
-	int y = point.at(i).second;
-	int x2 = point.at(i+1).first;
-	int y2 = point.at(i+1).second;
-//	if (abs(x-x2) < 10 && abs(y-y2) < 10) {
-	    mat.at<uchar>(x, y) = 255;
-//	}
+void addLineByPoints(Mat mat, vector<pair<int,int> > points) {
+    for (int i = 0; i < points.size(); i++) {
+	int y = points.at(i).first;
+	int x = points.at(i).second;
+        mat.at<uchar>(y, x) = 255;
     }
 }
 
@@ -308,17 +264,35 @@ void addLineByPoints(Mat mat, int index, vector< vector<pair<int,int> > > points
  * Given p and theta value, this function adds a line that satisfies the condition
  * to the input mat.
  */
-void addLine(Mat mat, int p, float theta) 
+void addLine(Mat mat, int p, float theta, int x_cen, int y_cen) 
 {
     double COS = cos(theta * PI / 180);
+    double SIN = sin(theta * PI / 180);
     double TAN = tan(theta * PI / 180);
-
-    for (int i = 0; i < mat.rows; i++) {
-	int j = (p / COS) - TAN * i;
-	if (j >= 0 && j < mat.cols) {
-	    mat.at<uchar>(i, j) = 255;
+    /*
+    for (int y = -y_cen; y < y_cen; y++) {
+	int x = (p / COS) - TAN * (y-y_cen) + x_cen;
+	if (x+x_cen >= 0 && x+x_cen < mat.cols) {
+	    mat.at<uchar>(y+y_cen, x+x_cen) = 255;
 	}
     }
+    */
+
+    int x1, y1, x2, y2;
+    x1 = y1 = x2 = y2 = 0;
+    if (theta >= 45 && theta <= 135) {
+	x1 = 0;
+	y1 = ((double) p*PSTEP-maxP) - (x1-x_cen) * COS / SIN + y_cen;
+	x2 = mat.cols;
+	y2 = ((double) p*PSTEP-maxP) - (x2-x_cen) * COS / SIN + y_cen;
+    } else {
+	y1 = 0;
+	x1 = ((double) p*PSTEP-maxP) - (y1-y_cen) * SIN / COS + x_cen;
+	y2 = mat.rows;
+	x2 = ((double) p*PSTEP-maxP) - (y2-y_cen) * SIN / COS + x_cen;
+    }
+
+    line(mat, Point(x1, y1), Point(x2, y2), Scalar(255), 2, 8);
 }
 
 void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points) 
@@ -563,13 +537,13 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     // Thresholding
-    Mat edges = myThresholding(gradient, 11);
+    Mat edges = myThresholding(gradient, 15);
     if (DISPLAY_IMAGE) {
-        imshow("Display window", gradient);
+        imshow("Display window", edges);
 	waitKey(0);
     }
     // Hough Transform
-    unordered_map<int, vector<int> > lines = myHoughTransform(edges); 
+    myHoughTransform(edges); 
 
     // Detect Parallelogram
     
