@@ -27,6 +27,7 @@ Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
 void myHoughTransform(Mat mat);
+bool isPointsClose(vector<pair<int,int> >points, double threshold);
 void addLine(Mat mat, int p, float theta, int x_cen, int y_cen); 
 void addLineByPoints(Mat mat, vector<pair<int,int> >  points); 
 void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points);
@@ -206,18 +207,18 @@ void myHoughTransform(Mat mat)
 	    }
 	}
     }
-
+/*
     for (int i = 0; i < psize; i++) {
 	for (int j = 0; j < anglesize; j++) {
 	    cout << accumulator[i * anglesize + j] << " ";
 	}
 	cout << endl;
     }
-
+*/
     Mat lineMat = Mat(rows, cols, CV_8UC1, 0.0);
     for (int i = 0; i < psize; i++) {
 	for (int j = 0; j < anglesize; j++) {
-	    if (accumulator[i * anglesize + j] > 300) {
+	    if (accumulator[i * anglesize + j] > 150) {
 		bool localMaximum = true;
 		for (int a = -4; a <= 4; a++) {
 		    for (int b = -4; b <= 4; b++) {
@@ -231,23 +232,39 @@ void myHoughTransform(Mat mat)
 
 		if (localMaximum) {
 //		    addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2, x_cen, y_cen);
-		    lineMat = Mat(rows, cols, CV_8UC1, 0.0);
+		    if (!isPointsClose(points[i * anglesize + j], 0.03)) {
+			continue;
+		    }
 		    addLineByPoints(lineMat, points[i * anglesize + j]);
-		    
-    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-    moveWindow("Display window 2", 20, 20);
-    imshow("Display window 2", lineMat);
-    waitKey(0);
 		}
 
 	    }
 	}
     }
+		    
+    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+    moveWindow("Display window 2", 20, 20);
+    imshow("Display window 2", lineMat);
+    waitKey(0);
     delete accumulator;
 }
 
-
-
+/* Given a list of points, test whether the points are close enough to each other. */
+bool isPointsClose(vector<pair<int,int> >points, double threshold)
+{
+    int discontinous = 0;
+    for (int i = 0; i < points.size()-1; i++) {
+	int x1 = points.at(i).first;
+	int y1 = points.at(i).second;
+	int x2 = points.at(i+1).first;
+	int y2 = points.at(i+1).second;
+	if (abs(x1-x2) > 10 || abs(y1-y2) > 10) {
+	    discontinous++;
+	}
+    }
+    double rate = (double) discontinous / points.size();
+    return rate < threshold;
+}
 
 /*
  * This is function plots all the edge points corresponding to a line on a Mat.
