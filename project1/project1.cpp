@@ -27,9 +27,9 @@ Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
 void myHoughTransform(Mat mat);
-bool isPointsClose(vector<pair<int,int> >points, double threshold);
-void addLine(Mat mat, int p, float theta, int x_cen, int y_cen); 
-void addLineByPoints(Mat mat, vector<pair<int,int> >  points); 
+bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD);
+void addLine(Mat mat, int p, float theta); 
+void addLineByPoints(Mat mat, vector<pair<int,int> >  points, int intensity); 
 void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points);
 vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points); 
 bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat);
@@ -37,6 +37,9 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,i
 int maxP;
 int cols;
 int rows;
+int ACCU_THRESHOLD;
+double CLOSENESS;
+int STANDARD_DEVIATION;
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
 Mat convertToGrayScale(Mat mat)
@@ -171,29 +174,6 @@ void myHoughTransform(Mat mat)
 	}
     }
 
-    /*
-    for (float theta = ANGLESTEP/2; theta < 180; theta += ANGLESTEP) {
-	float p = 5 * cos(theta * PI / 180) + 8 * sin(theta * PI / 180);
-	int pindex = (p + maxP) / PSTEP;
-	int tindex = theta/ANGLESTEP;
-
-	cout << theta << " + " << p << endl;
-	cout << pindex << " - " << tindex << endl;
-	cout << pindex * anglesize + tindex << endl;
-
-
-	accumulator[pindex * anglesize + tindex]++;
-    }
-
-    cout << psize << " " << anglesize << endl;
-    for (int i = 0; i < psize; i++) {
-	for (int j = 0; j < anglesize; j++) {
-	    cout << accumulator[i * anglesize + j] << " ";
-	}
-	cout << endl;
-    }
-    */
-
     for (int y = 0; y < mat.rows; y++) {
 	for (int x = 0; x < mat.cols; x++) {
 	    if (mat.at<uchar>(y, x) == 0) {  // edge point
@@ -207,18 +187,10 @@ void myHoughTransform(Mat mat)
 	    }
 	}
     }
-/*
-    for (int i = 0; i < psize; i++) {
-	for (int j = 0; j < anglesize; j++) {
-	    cout << accumulator[i * anglesize + j] << " ";
-	}
-	cout << endl;
-    }
-*/
     Mat lineMat = Mat(rows, cols, CV_8UC1, 0.0);
     for (int i = 0; i < psize; i++) {
 	for (int j = 0; j < anglesize; j++) {
-	    if (accumulator[i * anglesize + j] > 150) {
+	    if (accumulator[i * anglesize + j] > ACCU_THRESHOLD) {
 		bool localMaximum = true;
 		for (int a = -4; a <= 4; a++) {
 		    for (int b = -4; b <= 4; b++) {
@@ -231,27 +203,48 @@ void myHoughTransform(Mat mat)
 		}
 
 		if (localMaximum) {
-//		    addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2, x_cen, y_cen);
-		    if (!isPointsClose(points[i * anglesize + j], 0.03)) {
+		    if (!isPointsClose(points[i * anglesize + j], CLOSENESS, STANDARD_DEVIATION)) {
 			continue;
 		    }
-		    addLineByPoints(lineMat, points[i * anglesize + j]);
+		    
+		    if (true) {
+			addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2);
+		    }
+
+
+//		    addLineByPoints(lineMat, points[i * anglesize + j], 255);
+		    if (false) {    // add one line per mat
+			lineMat.release();
+//			lineMat = mat.clone();
+			lineMat = Mat(rows, cols, CV_8UC1, 0.0);
+			addLineByPoints(lineMat, points[i * anglesize + j], 255);
+			namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+			moveWindow("Display window 2", 20, 20);
+			imshow("Display window 2", lineMat);
+			waitKey(0);
+		    }
 		}
 
 	    }
 	}
     }
-		    
-    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-    moveWindow("Display window 2", 20, 20);
-    imshow("Display window 2", lineMat);
-    waitKey(0);
+
+    if (true) {
+        namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+	moveWindow("Display window 2", 20, 20);
+        imshow("Display window 2", lineMat);
+	waitKey(0);
+    }
+    
     delete accumulator;
 }
 
 /* Given a list of points, test whether the points are close enough to each other. */
-bool isPointsClose(vector<pair<int,int> >points, double threshold)
+bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD)
 {
+    double sd = 0;
+    int sumx = 0;
+    int sumy = 0;
     int discontinous = 0;
     for (int i = 0; i < points.size()-1; i++) {
 	int x1 = points.at(i).first;
@@ -261,19 +254,33 @@ bool isPointsClose(vector<pair<int,int> >points, double threshold)
 	if (abs(x1-x2) > 10 || abs(y1-y2) > 10) {
 	    discontinous++;
 	}
+	sumx += points.at(i).first;
+	sumy += points.at(i).second;
     }
     double rate = (double) discontinous / points.size();
-    return rate < threshold;
+
+    sumx += points.at(points.size()-1).first;
+    sumy += points.at(points.size()-1).second;
+    double meanx = sumx / points.size();
+    double meany = sumy / points.size();
+
+    for (int i = 0; i < points.size(); i++) {
+	sd += sqrt(pow(points.at(i).first-meanx, 2) + pow(points.at(i).second-meany, 2));
+    }
+    double meansd = sd / points.size();
+
+    cout << rate << " + " << meansd << endl;
+    return rate < closeness && meansd < SD;
 }
 
 /*
  * This is function plots all the edge points corresponding to a line on a Mat.
  */
-void addLineByPoints(Mat mat, vector<pair<int,int> > points) {
+void addLineByPoints(Mat mat, vector<pair<int,int> > points, int intensity) {
     for (int i = 0; i < points.size(); i++) {
 	int y = points.at(i).first;
 	int x = points.at(i).second;
-        mat.at<uchar>(y, x) = 255;
+        mat.at<uchar>(y, x) = intensity;
     }
 }
 
@@ -281,35 +288,16 @@ void addLineByPoints(Mat mat, vector<pair<int,int> > points) {
  * Given p and theta value, this function adds a line that satisfies the condition
  * to the input mat.
  */
-void addLine(Mat mat, int p, float theta, int x_cen, int y_cen) 
+void addLine(Mat mat, int p, float theta)
 {
     double COS = cos(theta * PI / 180);
-    double SIN = sin(theta * PI / 180);
     double TAN = tan(theta * PI / 180);
-    /*
-    for (int y = -y_cen; y < y_cen; y++) {
-	int x = (p / COS) - TAN * (y-y_cen) + x_cen;
-	if (x+x_cen >= 0 && x+x_cen < mat.cols) {
-	    mat.at<uchar>(y+y_cen, x+x_cen) = 255;
+    for (int y = 0; y < mat.rows; y++) {
+	int x = (p / COS) - TAN * y;
+	if (x >= 0 && x < mat.cols) {
+	    mat.at<uchar>(y, x) = 255;
 	}
     }
-    */
-
-    int x1, y1, x2, y2;
-    x1 = y1 = x2 = y2 = 0;
-    if (theta >= 45 && theta <= 135) {
-	x1 = 0;
-	y1 = ((double) p*PSTEP-maxP) - (x1-x_cen) * COS / SIN + y_cen;
-	x2 = mat.cols;
-	y2 = ((double) p*PSTEP-maxP) - (x2-x_cen) * COS / SIN + y_cen;
-    } else {
-	y1 = 0;
-	x1 = ((double) p*PSTEP-maxP) - (y1-y_cen) * SIN / COS + x_cen;
-	y2 = mat.rows;
-	x2 = ((double) p*PSTEP-maxP) - (y2-y_cen) * SIN / COS + x_cen;
-    }
-
-    line(mat, Point(x1, y1), Point(x2, y2), Scalar(255), 2, 8);
 }
 
 void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points) 
@@ -489,7 +477,7 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,i
 int main(int argc, char** argv) 
 {
     String imageName("images/house.jpeg");  // default image path
-    if (argc > 1)   // get image name 
+    if (argc > 1)   // get image name and step up configuration parameters 
     {
 	String one("1");
 	String two("2");
@@ -498,10 +486,19 @@ int main(int argc, char** argv)
 	String five("5");
 	if (one.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage1c.jpg";
+	    ACCU_THRESHOLD = 500;
+	    CLOSENESS = 0.01;
+	    STANDARD_DEVIATION = 90;
 	} else if (two.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage2c.jpg";
+	    ACCU_THRESHOLD = 100;
+	    CLOSENESS = 0.045;
+	    STANDARD_DEVIATION = 150;
 	} else if (three.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage3.jpg";
+	    ACCU_THRESHOLD = 100;
+	    CLOSENESS = 0.035;
+	    STANDARD_DEVIATION = 140;
 	} else if (four.compare(argv[1]) == 0) {
 	    imageName = "images/small.jpg";
 	} else if (five.compare(argv[1]) == 0) {
@@ -548,7 +545,7 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     // Apply Sobel operator and display result
-    Mat gradient = mySobel(enhanced);
+    Mat gradient = mySobel(gaussian);
     if (DISPLAY_IMAGE) {
         imshow("Display window", gradient);
 	waitKey(0);
