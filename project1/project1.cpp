@@ -30,9 +30,10 @@ unordered_map<double, vector<int> > myHoughTransform(Mat mat);
 bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD);
 void addLine(Mat mat, int p, float theta); 
 void addLineByPoints(Mat mat, vector<pair<int,int> >  points, int intensity); 
-void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges); 
+vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges);
 vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges); 
 bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat);
+void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image);
 
 int maxP;
 int cols;
@@ -40,6 +41,7 @@ int rows;
 int ACCU_THRESHOLD;
 double CLOSENESS;
 int STANDARD_DEVIATION;
+int GRADIENT_THRESHOLD;
 
 /*  This function converst a RGB Mat object into a grayscale Mat.  */
 Mat convertToGrayScale(Mat mat)
@@ -284,7 +286,6 @@ bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD)
     }
     double meansd = sd / points.size();
 
-//  cout << rate << " + " << meansd << endl;
     return rate < closeness && meansd < SD;
 }
 
@@ -315,30 +316,24 @@ void addLine(Mat mat, int p, float theta)
     }
 }
 
-void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges) 
+vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges) 
 {   
     // put all angles in an vector
     vector<double> angles;
     for (unordered_map<double, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
     {
+	/*
 	cout << it->first << ": ";
 	for (int i = 0; i < it->second.size(); i++) {
 	    cout << it->second.at(i) << " ";
 	}
 	cout << endl;
-
+	*/
 	if (it->second.size() > 1) {	// need at least two lines for each angle
 	    angles.push_back(it->first);
 	}
     }
-    cout << angles.size() << endl;    
-    for (int i = 0; i < angles.size(); i++) {
-	cout << angles.at(i) << " ";
-    }
-    cout << endl;
-
     vector<vector<pair<int, int> > > intersections;
-
     for (int a1 = 0; a1 < angles.size(); a1++) {  // first angle
 	for (int a2 = a1 + 1; a2 < angles.size(); a2++) { // second angle 
 	    for (int a1p1 = 0; a1p1 < lines[angles.at(a1)].size(); a1p1++) {
@@ -353,7 +348,6 @@ void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges)
 			    int a2p2v = lines[theta2].at(a2p2);
 
 			    vector<pair<int,int> > intersect = checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, edges);
-			    cout << intersect.size() << endl;
 			    if (intersect.size() == 4) {
 				cout << "Find parallelogram" << endl;
 				intersections.push_back(intersect);
@@ -364,7 +358,7 @@ void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges)
 	    }
 	}
     }
-
+/*
     Mat lineMat = Mat(rows, cols, CV_8UC1, 255.0);
     for (int i = 0; i < intersections.size(); i++) {
 	vector<pair<int, int>> parallel = intersections.at(i);
@@ -377,21 +371,15 @@ void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges)
 	        p2 = parallel.at(j+1);
 	    }
 	    line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
-	    
-/*	    for (int k = j + 1; k < parallel.size(); k++) {
-		pair<int, int> p = parallel.at(j);
-		pair<int, int> p2 = parallel.at(k);
-		cout << p.first << " " << p.second << endl;
-		line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
-	    }
-*/
 	}
     }
-   
-	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-        moveWindow("Display window 2", 20, 20);
-        imshow("Display window 2", lineMat);
-	waitKey(0);
+   	
+    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+    moveWindow("Display window 2", 20, 20);
+    imshow("Display window 2", lineMat);
+    waitKey(0);
+*/
+    return intersections;
 }
 
 vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges) 
@@ -412,7 +400,7 @@ vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, doub
     if (!findIntersection(theta2, a2p2, theta1, a1p1, intersection, edges, pointMat)) {
 	intersection.clear();
     }
-
+/*
     if (intersection.size() == 4) {
 	for (int j = 0; j < intersection.size(); j++) {
 	    pair<int, int> p = intersection.at(j);
@@ -429,7 +417,7 @@ vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, doub
         imshow("Display window 2", pointMat);
 	waitKey(0);
     }
-
+*/
     /*
     if (intersection.size() > 0) {
     for (int i = 0; i < intersection.size(); i++) {
@@ -491,6 +479,30 @@ bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair
     }
     return false;
 }
+    
+void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image) {
+    Mat lineMat = image.clone();
+    for (int i = 0; i < intersections.size(); i++) {
+	cout << "Coordinates of corners: {";
+	vector<pair<int, int>> parallel = intersections.at(i);
+	for (int j = 0; j < parallel.size(); j++) {
+	    pair<int, int> p = parallel.at(j);
+	    pair<int, int> p2;
+	    if (j == parallel.size() - 1) {
+		p2 = parallel.at(0);
+	    } else {
+	        p2 = parallel.at(j+1);
+	    }
+	    line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0, 0, 255), 2, 8);
+	    cout << "(" << p.second << ",-" << p.first << ")";
+	}
+	cout << "}" << endl;
+    }	    
+    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
+    moveWindow("Display window 2", 20, 20);
+    imshow("Display window 2", lineMat);
+    waitKey(0);
+}
 
 int main(int argc, char** argv) 
 {
@@ -507,20 +519,19 @@ int main(int argc, char** argv)
 	    ACCU_THRESHOLD = 500;
 	    CLOSENESS = 0.01;
 	    STANDARD_DEVIATION = 90;
+	    GRADIENT_THRESHOLD = 30;
 	} else if (two.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage2c.jpg";
 	    ACCU_THRESHOLD = 100;
 	    CLOSENESS = 0.045;
 	    STANDARD_DEVIATION = 150;
+	    GRADIENT_THRESHOLD = 30;
 	} else if (three.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage3.jpg";
 	    ACCU_THRESHOLD = 100;
 	    CLOSENESS = 0.035;
 	    STANDARD_DEVIATION = 140;
-	} else if (four.compare(argv[1]) == 0) {
-	    imageName = "images/small.jpg";
-	} else if (five.compare(argv[1]) == 0) {
-	    imageName = "images/small2.jpg";
+	    GRADIENT_THRESHOLD = 20;
 	} else {
 	    imageName = argv[1];	
 	} 
@@ -569,7 +580,7 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     // Thresholding
-    Mat edges = myThresholding(gradient, 15);
+    Mat edges = myThresholding(gradient, GRADIENT_THRESHOLD);
     if (DISPLAY_IMAGE) {
         imshow("Display window", edges);
 	waitKey(0);
@@ -578,7 +589,10 @@ int main(int argc, char** argv)
     unordered_map<double, vector<int> > lines = myHoughTransform(edges); 
 
     // Detect Parallelogram
-    detectParallelogram(lines, edges);
+    vector<vector<pair<int, int> > > intersections = detectParallelogram(lines, edges);
+
+    // Display the parallelogram
+    displayParallelogram(intersections, image);
 
     return 0;
 }
