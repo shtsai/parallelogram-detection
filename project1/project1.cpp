@@ -26,13 +26,13 @@ Mat convertToGrayScale(Mat mat);
 Mat myEnhancer(Mat mat);
 Mat mySobel(Mat mat);
 Mat myThresholding(Mat mat, int threshold);
-void myHoughTransform(Mat mat);
+unordered_map<double, vector<int> > myHoughTransform(Mat mat);
 bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD);
 void addLine(Mat mat, int p, float theta); 
 void addLineByPoints(Mat mat, vector<pair<int,int> >  points, int intensity); 
-void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points);
-vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points); 
-bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat);
+void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges); 
+vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges); 
+bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat);
 
 int maxP;
 int cols;
@@ -160,14 +160,15 @@ Mat myThresholding(Mat mat, int threshold)
  * list of p values. 
  */
 
-void myHoughTransform(Mat mat)
+unordered_map<double, vector<int> > myHoughTransform(Mat mat)
 {
     int maxP = sqrt(pow(rows, 2) + pow(cols, 2));
     int psize = maxP * 2 / PSTEP;
     int anglesize = 180/ANGLESTEP;
     int* accumulator = new int[psize * anglesize];
     vector<pair<int,int> >* points = new vector<pair<int, int> >[psize * anglesize];
-    
+    unordered_map<double, vector<int> > lines;
+
     for (int i = 0; i < psize; i++) {
 	for (int j = 0; j < anglesize; j++) {
 	    accumulator[i * anglesize + j] = 0;
@@ -187,6 +188,7 @@ void myHoughTransform(Mat mat)
 	    }
 	}
     }
+
     Mat lineMat = Mat(rows, cols, CV_8UC1, 0.0);
     for (int i = 0; i < psize; i++) {
 	for (int j = 0; j < anglesize; j++) {
@@ -204,14 +206,26 @@ void myHoughTransform(Mat mat)
 
 		if (localMaximum) {
 		    if (!isPointsClose(points[i * anglesize + j], CLOSENESS, STANDARD_DEVIATION)) {
-			continue;
+			continue;   // skip lines that don't meet the requirement
 		    }
-		    
-		    if (true) {
+
+		    /*
+		    if (lines.find(j * ANGLESTEP + ANGLESTEP/2.0) != lines.end()) {  // there are other lines with the same angle
+			lines[j * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
+		    } else if (j - 1 >= 0 && lines.find((j-1) * ANGLESTEP + ANGLESTEP/2.0) != lines.end()) {
+			lines[(j-1) * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
+		    } else if (j + 1 < anglesize && lines.find((j+1) * ANGLESTEP + ANGLESTEP/2.0) != lines.end()) {
+			lines[(j+1) * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
+		    } else {
+			lines[j * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
+		    } 
+		    */
+
+		    lines[j * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
+//		    cout << j * ANGLESTEP + ANGLESTEP/2.0 << " " << i * PSTEP - maxP << endl;
+		    if (false) {
 			addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2);
 		    }
-
-
 //		    addLineByPoints(lineMat, points[i * anglesize + j], 255);
 		    if (false) {    // add one line per mat
 			lineMat.release();
@@ -229,7 +243,8 @@ void myHoughTransform(Mat mat)
 	}
     }
 
-    if (true) {
+
+    if (false) {
         namedWindow("Display window 2", WINDOW_AUTOSIZE); 
 	moveWindow("Display window 2", 20, 20);
         imshow("Display window 2", lineMat);
@@ -237,6 +252,7 @@ void myHoughTransform(Mat mat)
     }
     
     delete accumulator;
+    return lines;
 }
 
 /* Given a list of points, test whether the points are close enough to each other. */
@@ -263,13 +279,12 @@ bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD)
     sumy += points.at(points.size()-1).second;
     double meanx = sumx / points.size();
     double meany = sumy / points.size();
-
     for (int i = 0; i < points.size(); i++) {
 	sd += sqrt(pow(points.at(i).first-meanx, 2) + pow(points.at(i).second-meany, 2));
     }
     double meansd = sd / points.size();
 
-    cout << rate << " + " << meansd << endl;
+//  cout << rate << " + " << meansd << endl;
     return rate < closeness && meansd < SD;
 }
 
@@ -300,21 +315,28 @@ void addLine(Mat mat, int p, float theta)
     }
 }
 
-void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<pair<int,int> > > points) 
+void detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges) 
 {   
     // put all angles in an vector
-    vector<int> angles;
-    for (unordered_map<int, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
+    vector<double> angles;
+    for (unordered_map<double, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
     {
-	/*
-	cout << it->first << " ";
+	cout << it->first << ": ";
 	for (int i = 0; i < it->second.size(); i++) {
 	    cout << it->second.at(i) << " ";
 	}
 	cout << endl;
-	*/
-	angles.push_back(it->first);
+
+	if (it->second.size() > 1) {	// need at least two lines for each angle
+	    angles.push_back(it->first);
+	}
     }
+    cout << angles.size() << endl;    
+    for (int i = 0; i < angles.size(); i++) {
+	cout << angles.at(i) << " ";
+    }
+    cout << endl;
+
     vector<vector<pair<int, int> > > intersections;
 
     for (int a1 = 0; a1 < angles.size(); a1++) {  // first angle
@@ -323,18 +345,18 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<
 		for (int a1p2 = a1p1 + 1; a1p2 < lines[angles.at(a1)].size(); a1p2++) {
 		    for (int a2p1 = 0; a2p1 < lines[angles.at(a2)].size(); a2p1++) {
 			for (int a2p2 = a2p1+1; a2p2 < lines[angles.at(a2)].size(); a2p2++) {
-			    int theta1 = angles.at(a1);
-			    int theta2 = angles.at(a2);
+			    double theta1 = angles.at(a1);
+			    double theta2 = angles.at(a2);
 			    int a1p1v = lines[theta1].at(a1p1);
 			    int a1p2v = lines[theta1].at(a1p2);
 			    int a2p1v = lines[theta2].at(a2p1);
 			    int a2p2v = lines[theta2].at(a2p2);
 
-			    vector<pair<int,int> > intersection = checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, points);
-			    cout << intersection.size() << endl;
-			    if (intersection.size() == 4) {
+			    vector<pair<int,int> > intersect = checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, edges);
+			    cout << intersect.size() << endl;
+			    if (intersect.size() == 4) {
 				cout << "Find parallelogram" << endl;
-				intersections.push_back(intersection);
+				intersections.push_back(intersect);
 			    }
 			}
 		    }
@@ -347,12 +369,22 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<
     for (int i = 0; i < intersections.size(); i++) {
 	vector<pair<int, int>> parallel = intersections.at(i);
 	for (int j = 0; j < parallel.size(); j++) {
-	    for (int k = j + 1; k < parallel.size(); k++) {
+	    pair<int, int> p = parallel.at(j);
+	    pair<int, int> p2;
+	    if (j == parallel.size() - 1) {
+		p2 = parallel.at(0);
+	    } else {
+	        p2 = parallel.at(j+1);
+	    }
+	    line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
+	    
+/*	    for (int k = j + 1; k < parallel.size(); k++) {
 		pair<int, int> p = parallel.at(j);
 		pair<int, int> p2 = parallel.at(k);
 		cout << p.first << " " << p.second << endl;
 		line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
 	    }
+*/
 	}
     }
    
@@ -362,26 +394,36 @@ void detectParallelogram(unordered_map<int, vector<int> > lines, vector< vector<
 	waitKey(0);
 }
 
-vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int theta2, int a2p1, int a2p2, vector< vector<pair<int,int> > > points) 
+vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges) 
 {
     vector<pair<int, int> > intersection;
     Mat pointMat = Mat(rows, cols, CV_8UC1, 255.0);
     
 
-    if (!findIntersection(theta1, a1p1, theta2, a2p1, intersection, points, pointMat)) {
+    if (!findIntersection(theta1, a1p1, theta2, a2p1, intersection, edges, pointMat)) {
 	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p1, theta2, a2p2, intersection, points, pointMat)) {
+    if (!findIntersection(theta2, a2p1, theta1, a1p2, intersection, edges, pointMat)) {
 	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p2, theta2, a2p1, intersection, points, pointMat)) {
+    if (!findIntersection(theta1, a1p2, theta2, a2p2, intersection, edges, pointMat)) {
 	intersection.clear();
     }
-    if (!findIntersection(theta1, a1p2, theta2, a2p2, intersection, points, pointMat)) {
+    if (!findIntersection(theta2, a2p2, theta1, a1p1, intersection, edges, pointMat)) {
 	intersection.clear();
     }
 
-    if (false) {
+    if (intersection.size() == 4) {
+	for (int j = 0; j < intersection.size(); j++) {
+	    pair<int, int> p = intersection.at(j);
+	    pair<int, int> p2;
+	    if (j == intersection.size() - 1) {
+		p2 = intersection.at(0);
+	    } else {
+	        p2 = intersection.at(j+1);
+	    }
+	    line(pointMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
+	}
 	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
         moveWindow("Display window 2", 20, 20);
         imshow("Display window 2", pointMat);
@@ -401,7 +443,7 @@ vector<pair<int,int> > checkIntersection(int theta1, int a1p1, int a1p2, int the
     return intersection;
 }
 
-bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,int> > &intersection, vector< vector<pair<int,int> > > points, Mat pointMat)
+bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat)
 {
     double i, j;
     int inti, intj;
@@ -410,53 +452,25 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,i
 	/ (sin(theta2*PI/180)*cos(theta1*PI/180)-sin(theta1*PI/180)*cos(theta2*PI/180));
     j = (p1 - i * sin(theta1*PI/180)) / cos(theta1*PI/180);
 
+    if (i < 0 || i >= rows || j < 0 || j >= cols) return false;
     inti = (int) i;
     intj = (int) j;
-    bool found1 = false;
-    bool found2= false;
+    bool found = true;
 
-    int index1 = ((p1 + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) theta1/ANGLESTEP;
-    int index2 = ((p2 + maxP)/PSTEP)*(180/ANGLESTEP+1)+(int) theta2/ANGLESTEP;
-    vector<pair<int,int> > point1 = points.at(index1);
-    vector<pair<int,int> > point2 = points.at(index2);
-    for (int i = 0; i < point1.size(); i++) {
-	pair<int,int> pair1 = point1.at(i);
-	if (abs(pair1.first - inti) < 100 && abs(pair1.second - intj) < 100) {
-	    found1 = true;
-	    break;
-	}
-    }
-    for (int i = 0; i < point2.size(); i++) {
-	pair<int,int> pair2 = point2.at(i);
-	if (abs(pair2.first - inti) < 100 && abs(pair2.second - intj) < 100) {
-	    found2 = true;
-	    break;
-	}
-    }
-/*
-    for (int a = -10; a <= 10; a++)  // check 5 * 5 surrounding pixels
-    {
-	for (int b = -10; b <= 10; b++) 
-	{
-	    if (found) 
-	    {
-		break;
-	    }
-	    if (inti+a >= 0 && inti+a < mat.rows && intj+b >= 0 && intj+b < mat.cols) 
-	    {
-		//cout << inti+a << "," << intj+b << "=" << (int) mat.at<uchar>(inti+a, intj+b) << " ";
-		if (mat.at<uchar>(inti+a,intj+b)==0) 
-		{
+    for (int di = -9; di <= 9; di++) {
+	for (int dj = -9; dj <= 9; dj++) {
+	    if (inti + di >= 0 && inti + di < rows && intj + dj >= 0 && intj + dj < cols) {
+		if (edges.at<uchar>(inti+di, intj+dj) == 0) {
 		    found = true;
-		}
+		    break;
+	        }
 	    }
 	}
-    }
- */
-//    cout << endl;
+	if (found) break;
+    } 
 
-    if (found1 && found2) {
-	/*	
+    if (found) {
+	/*
 	// add points to the mat for display purpose
         cout << inti << " + " << intj << endl;
 	for (int a = -2; a <= 2; a++) {
@@ -465,8 +479,12 @@ bool findIntersection (int theta1, int p1, int theta2, int p2, vector<pair<int,i
 	    }
         }
 	*/
+
+    /*
 	cout << "found" << endl;
 	cout << inti << " " << intj << endl;
+    */
+
 	pair<int, int> point (inti, intj);
 	intersection.push_back(point);
 	return true;
@@ -557,10 +575,10 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     // Hough Transform
-    myHoughTransform(edges); 
+    unordered_map<double, vector<int> > lines = myHoughTransform(edges); 
 
     // Detect Parallelogram
-    
+    detectParallelogram(lines, edges);
 
     return 0;
 }
