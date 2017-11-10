@@ -102,12 +102,12 @@ Mat mySobel(Mat mat)
     int nCols = mat.cols;
     int minM = INT_MAX;
     int maxM = INT_MIN;
-    vector<vector<int> > M (nRows, vector<int>(nCols, 0));
-    
+    vector<vector<int> > M (nRows, vector<int>(nCols, 0));	// magnitude
+    vector<vector<double> > GA (nRows, vector<double>(nCols, 0));  // gradient angle
     Mat gradient = Mat(nRows, nCols, CV_8UC1, 0.0);
     
-    for (int i = 1; i < nRows-1; i++) 
-    {
+    // compute gradient magnitude and gradient angle
+    for (int i = 1; i < nRows-1; i++) {
 	for (int j = 1; j < nCols-1; j++) {
 	    int Gx = mat.at<uchar>(i-1,j+1)+2*mat.at<uchar>(i,j+1)+mat.at<uchar>(i+1,j+1)
 	                     -mat.at<uchar>(i-1,j-1)-2*mat.at<uchar>(i,j-1)-mat.at<uchar>(i+1,j-1);
@@ -116,7 +116,38 @@ Mat mySobel(Mat mat)
 	                     -mat.at<uchar>(i+1,j-1)-2*mat.at<uchar>(i+1,j)-mat.at<uchar>(i+1,j+1);
 
 	    M.at(i).at(j) = sqrt(pow(Gx, 2) + pow(Gy, 2));
+	    GA.at(i).at(j) = atan((double) Gy/Gx) * 180 / PI;
+	}
+    }
+
+    // Non-maxima suppression
+    for (int i = 1; i < nRows-1; i++) {
+	for (int j = 1; j < nCols-1; j++) {
+	    double angle = GA.at(i).at(j);
+	    if (angle < 0) {
+		angle += 180;
+	    } else if (angle > 180) {
+		angle -= 180;
+	    }
+	    if ((angle >= 0 && angle <= 22.5) || (angle >= 157.5 && angle <= 180)) {
+		if (!(M.at(i).at(j) > M.at(i).at(j+1) && M.at(i).at(j) > M.at(i).at(j-1))) {
+		    M.at(i).at(j) = 0;
+		}	    
+	    } else if (angle > 22.5 && angle <= 67.5) {
+		if (!(M.at(i).at(j) > M.at(i-1).at(j+1) && M.at(i).at(j) > M.at(i+1).at(j-1))) {
+		    M.at(i).at(j) = 0;
+		}	    
+	    } else if (angle > 67.5 && angle <= 112.5) {
+		if (!(M.at(i).at(j) > M.at(i-1).at(j) && M.at(i).at(j) > M.at(i+1).at(j))) {
+		    M.at(i).at(j) = 0;
+		}	    
+	    } else {
+		if (!(M.at(i).at(j) > M.at(i-1).at(j-1) && M.at(i).at(j) > M.at(i+1).at(j+1))) {
+		    M.at(i).at(j) = 0;
+		}	    
+	    }
 	    
+	    // update min and max
 	    minM = min(minM, M.at(i).at(j));
 	    maxM = max(maxM, M.at(i).at(j));
 	}
@@ -225,7 +256,7 @@ unordered_map<double, vector<int> > myHoughTransform(Mat mat)
 
 		    lines[j * ANGLESTEP + ANGLESTEP/2.0].push_back(i * PSTEP - maxP);
 //		    cout << j * ANGLESTEP + ANGLESTEP/2.0 << " " << i * PSTEP - maxP << endl;
-		    if (false) {
+		    if (true) {
 			addLine(lineMat, i * PSTEP - maxP, j * ANGLESTEP + ANGLESTEP/2);
 		    }
 //		    addLineByPoints(lineMat, points[i * anglesize + j], 255);
@@ -246,7 +277,7 @@ unordered_map<double, vector<int> > myHoughTransform(Mat mat)
     }
 
 
-    if (false) {
+    if (true) {
         namedWindow("Display window 2", WINDOW_AUTOSIZE); 
 	moveWindow("Display window 2", 20, 20);
         imshow("Display window 2", lineMat);
@@ -516,22 +547,22 @@ int main(int argc, char** argv)
 	String five("5");
 	if (one.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage1c.jpg";
-	    ACCU_THRESHOLD = 500;
-	    CLOSENESS = 0.01;
-	    STANDARD_DEVIATION = 90;
+	    ACCU_THRESHOLD = 100;
+	    CLOSENESS = 0.02;
+	    STANDARD_DEVIATION = 100;
 	    GRADIENT_THRESHOLD = 30;
 	} else if (two.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage2c.jpg";
-	    ACCU_THRESHOLD = 100;
+	    ACCU_THRESHOLD = 50;
 	    CLOSENESS = 0.045;
 	    STANDARD_DEVIATION = 150;
-	    GRADIENT_THRESHOLD = 30;
+	    GRADIENT_THRESHOLD = 20;
 	} else if (three.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage3.jpg";
-	    ACCU_THRESHOLD = 100;
-	    CLOSENESS = 0.035;
-	    STANDARD_DEVIATION = 140;
-	    GRADIENT_THRESHOLD = 20;
+	    ACCU_THRESHOLD = 20;
+	    CLOSENESS = 0.1;
+	    STANDARD_DEVIATION = 150;
+	    GRADIENT_THRESHOLD = 15;
 	} else {
 	    imageName = argv[1];	
 	} 
@@ -568,7 +599,7 @@ int main(int argc, char** argv)
 	waitKey(0);
     }
     Mat gaussian = Mat(enhanced.rows, enhanced.cols, CV_8UC1, 0.0);
-    GaussianBlur(enhanced, gaussian, Size(9, 9), 0, 0);
+    GaussianBlur(enhanced, gaussian, Size(3, 3), 0, 0);
     if (DISPLAY_IMAGE) {
         imshow("Display window", gaussian);
 	waitKey(0);
