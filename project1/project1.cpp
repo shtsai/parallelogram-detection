@@ -33,6 +33,7 @@ void addLineByPoints(Mat mat, vector<pair<int,int> >  points, int intensity);
 vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, Mat edges);
 vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges); 
 bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat);
+bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges);
 void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image);
 
 int maxP;
@@ -284,6 +285,7 @@ unordered_map<double, vector<int> > myHoughTransform(Mat mat)
 	waitKey(0);
     }
     
+    
     delete accumulator;
     return lines;
 }
@@ -353,13 +355,11 @@ vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vecto
     vector<double> angles;
     for (unordered_map<double, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
     {
-	/*
 	cout << it->first << ": ";
 	for (int i = 0; i < it->second.size(); i++) {
 	    cout << it->second.at(i) << " ";
 	}
 	cout << endl;
-	*/
 	if (it->second.size() > 1) {	// need at least two lines for each angle
 	    angles.push_back(it->first);
 	}
@@ -459,7 +459,13 @@ vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, doub
     }
     */
    
-    return intersection;
+    // validate whether the two intersections forms a parallelogram
+    if (intersection.size() == 4 && validateParallelogram(intersection, edges)) {
+	return intersection;
+    } else {
+	intersection.clear();
+	return intersection;
+    }
 }
 
 bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat)
@@ -511,6 +517,37 @@ bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair
     return false;
 }
     
+bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
+    int validCount = 0;
+    int total = 0;
+    for (int p = 0; p < intersection.size(); p++) {
+	pair<int,int> point1 = intersection.at(p);
+	pair<int,int> point2 = p < intersection.size()-1 ? intersection.at(p+1) : intersection.at(0);
+	// generate equation for the line going through these two points
+	double m = (double) (point1.first - point2.first) / (point1.second - point2.second);
+	double b = (double) point1.first - m * point1.second;
+	
+	int jMin = min(point1.second, point2.second);	// get the range of j between two points
+	int jMax = max(point1.second, point2.second);
+	total += jMax - jMin + 1;
+	for (int j = jMin; j <= jMax; j++) {
+	    int i = m * j + b;
+	    if (i < 0 || i > edges.rows) continue;  // outside of the mat
+	    bool found = false;
+	    for (int di = -3; di <= 3; di++) {	// check if there is a corresponding edge pixel near this line pixel
+		for (int dj = -3; dj <= 3; dj++) {
+		    if (edges.at<uchar>(i+di, j+dj) == 0) {
+			found = true;
+		    }
+		}
+	    }
+	    if (found) validCount++;
+	}
+    }
+    double score = (double) validCount / total;
+    return score > 0.5;
+}
+
 void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image) {
     Mat lineMat = image.clone();
     for (int i = 0; i < intersections.size(); i++) {
