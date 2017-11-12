@@ -1,6 +1,6 @@
 /**
  *  Computer Vision
- *  Project 1
+ *  Project 1: Parallelogram
  *  Shang-Hung Tsai
  */
  
@@ -27,14 +27,13 @@ Mat myThresholding(Mat mat, int threshold);
 vector<vector<pair<int, int> > > myHoughTransform(Mat mat);
 bool isPointsClose(vector<pair<int,int> >points, double closeness, double SD);
 void addLine(Mat mat, int p, float theta, int intensity); 
-void addLineByPoints(Mat mat, vector<pair<int,int> >  points, int intensity); 
 vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, vector<pair<int,int> >* points, Mat edges);
 vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges, vector<pair<int,int> >* points); 
 bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat, vector<pair<int,int> >* points);
 bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges);
 void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image);
 
-// global variables for detection parameters
+// global variables for detection parameters, initialize in main()
 int maxP;
 int cols;
 int rows;
@@ -313,17 +312,10 @@ void addLine(Mat mat, int p, float theta, int intensity)
  * and compute the number of edge points (in percentage) that are present for each side.
  * If the percentage is high for each side, then it is a parallelogram.
  */
-vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, vector<pair<int,int> >* points, Mat edges) 
-{   
+vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vector<int> > lines, vector<pair<int,int> >* points, Mat edges) {   
     // put all angles in an vector
     vector<double> angles;
-    for (unordered_map<double, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++)
-    {
-	cout << it->first << ": ";
-	for (int i = 0; i < it->second.size(); i++) {
-	    cout << it->second.at(i) << " ";
-	}
-	cout << endl;
+    for (unordered_map<double, vector<int> >::iterator it = lines.begin(); it != lines.end(); it++) {
 	if (it->second.size() > 1) {	// need at least two lines for each angle
 	    angles.push_back(it->first);
 	}
@@ -331,8 +323,8 @@ vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vecto
     vector<vector<pair<int, int> > > intersections;
     for (int a1 = 0; a1 < angles.size(); a1++) {  // first angle
 	for (int a2 = a1 + 1; a2 < angles.size(); a2++) { // second angle 
-	    for (int a1p1 = 0; a1p1 < lines[angles.at(a1)].size(); a1p1++) {
-		for (int a1p2 = a1p1 + 1; a1p2 < lines[angles.at(a1)].size(); a1p2++) {
+	    for (int a1p1 = 0; a1p1 < lines[angles.at(a1)].size(); a1p1++) {	
+		for (int a1p2 = a1p1 + 1; a1p2 < lines[angles.at(a1)].size(); a1p2++) {  
 		    for (int a2p1 = 0; a2p1 < lines[angles.at(a2)].size(); a2p1++) {
 			for (int a2p2 = a2p1+1; a2p2 < lines[angles.at(a2)].size(); a2p2++) {
 			    double theta1 = angles.at(a1);
@@ -343,8 +335,7 @@ vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vecto
 			    int a2p2v = lines[theta2].at(a2p2);
 
 			    vector<pair<int,int> > intersect = checkIntersection(theta1, a1p1v, a1p2v, theta2, a2p1v, a2p2v, edges, points);
-			    if (intersect.size() == 4) {
-				cout << "Find parallelogram" << endl;
+			    if (intersect.size() == 4) {  // find 4 intersections, valid parallelogram
 				intersections.push_back(intersect);
 			    }
 			}
@@ -353,36 +344,21 @@ vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vecto
 	    }
 	}
     }
-/*
-    Mat lineMat = Mat(rows, cols, CV_8UC1, 255.0);
-    for (int i = 0; i < intersections.size(); i++) {
-	vector<pair<int, int>> parallel = intersections.at(i);
-	for (int j = 0; j < parallel.size(); j++) {
-	    pair<int, int> p = parallel.at(j);
-	    pair<int, int> p2;
-	    if (j == parallel.size() - 1) {
-		p2 = parallel.at(0);
-	    } else {
-	        p2 = parallel.at(j+1);
-	    }
-	    line(lineMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
-	}
-    }
-   	
-    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-    moveWindow("Display window 2", 20, 20);
-    imshow("Display window 2", lineMat);
-    waitKey(0);
-*/
     return intersections;
 }
 
-vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges, vector<pair<int,int> >* points) 
-{
+/*
+ * Given the p values and theta values of four lines, this function checks if their intersections 
+ * are near a edge pixel. If we find four such points, we validate whether these points form a 
+ * parallelogram in the edge map. 
+ * If so, we return a vector containing four points.
+ * Otherwise, return an empty vector.
+ */
+vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges, vector<pair<int,int> >* points) {
     vector<pair<int, int> > intersection;
     Mat pointMat = Mat(rows, cols, CV_8UC1, 255.0);
     
-
+    // clear the vector if findIntersection() returns false
     if (!findIntersection(theta1, a1p1, theta2, a2p1, intersection, edges, pointMat, points)) {
 	intersection.clear();
     }
@@ -395,34 +371,7 @@ vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, doub
     if (!findIntersection(theta2, a2p2, theta1, a1p1, intersection, edges, pointMat, points)) {
 	intersection.clear();
     }
-/*
-    if (intersection.size() == 4) {
-	for (int j = 0; j < intersection.size(); j++) {
-	    pair<int, int> p = intersection.at(j);
-	    pair<int, int> p2;
-	    if (j == intersection.size() - 1) {
-		p2 = intersection.at(0);
-	    } else {
-	        p2 = intersection.at(j+1);
-	    }
-	    line(pointMat, Point(p.second, p.first), Point(p2.second, p2.first), Scalar(0), 2, 8);
-	}
-	namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-        moveWindow("Display window 2", 20, 20);
-        imshow("Display window 2", pointMat);
-	waitKey(0);
-    }
-*/
-    /*
-    if (intersection.size() > 0) {
-    for (int i = 0; i < intersection.size(); i++) {
-	pair<int, int> p = intersection.at(i);
-	cout << p.first << " + " << p.second << endl;
-    }
-    cout << endl;
-    }
-    */
-   
+
     // validate whether the two intersections forms a parallelogram
     if (intersection.size() == 4 && validateParallelogram(intersection, edges)) {
 	return intersection;
@@ -432,15 +381,18 @@ vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, doub
     }
 }
 
-bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat, vector<pair<int,int> >* points)
-{
+/*
+ * Given the theta values and p values of two lines, this function computes
+ * their intersection. And check if the intersection is near an edge pixel.
+ * If so, add the point to the list, and return true.
+ * Otherwise, return false.
+ */
+bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat, vector<pair<int,int> >* points) {
     double i, j;
     int inti, intj;
-
     i = (cos(theta1*PI/180)*p2 - cos(theta2*PI/180)*p1) 
 	/ (sin(theta2*PI/180)*cos(theta1*PI/180)-sin(theta1*PI/180)*cos(theta2*PI/180));
     j = (p1 - i * sin(theta1*PI/180)) / cos(theta1*PI/180);
-
     if (i < 0 || i >= rows || j < 0 || j >= cols) return false;
     inti = (int) i;
     intj = (int) j;
@@ -460,28 +412,19 @@ bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair
     } 
 
     if (found) {
-	/*
-	// add points to the mat for display purpose
-        cout << inti << " + " << intj << endl;
-	for (int a = -2; a <= 2; a++) {
-	    for (int b = -2; b <= 2; b++) {
-		pointMat.at<uchar>(inti+a, intj+b) = 0;
-	    }
-        }
-	*/
-
-    /*
-	cout << "found" << endl;
-	cout << inti << " " << intj << endl;
-    */
-
 	pair<int, int> point (inti, intj);
 	intersection.push_back(point);
 	return true;
     }
     return false;
 }
-    
+   
+/*
+ * We validate the parallelograms by going through four sides,
+ * and compute the number of edge points (in percentage) that are present for each side.
+ * If the percentage is greater than the given threshold for each side, 
+ * then it is a parallelogram.
+ */
 bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
     int validCount = 0;
     int total = 0;
@@ -498,7 +441,6 @@ bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
 	// generate equation for the line going through these two points
 	double m = (double) (point1.first - point2.first) / (point1.second - point2.second);
 	double b = (double) point1.first - m * point1.second;
-	
 	int jMin = min(point1.second, point2.second);	// get the range of j between two points
 	int jMax = max(point1.second, point2.second);
 	localTotal += jMax - jMin + 1;
@@ -515,7 +457,6 @@ bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
 	    }
 	    if (found) localValid++;
 	}
-	
 	double localScore = (double) localValid / localTotal;
 	if (localScore < (PARALLELOGRAM_THRESHOLD)) {
 	    return false;
@@ -527,6 +468,11 @@ bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
     return score > PARALLELOGRAM_THRESHOLD;
 }
 
+/*
+ * Given a vector of four points, this function superimpose the the four lines on the given mat.
+ * Note that the order of the points matters.
+ * The formed lines are (p1->p2, p2->p3, p3->p4, p4->p1).
+ */
 void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image) {
     Mat lineMat = image.clone();
     for (int i = 0; i < intersections.size(); i++) {
@@ -556,27 +502,26 @@ int main(int argc, char** argv)
     String imageName("images/house.jpeg");  // default image path
     if (argc > 1)   // get image name and step up configuration parameters 
     {
+	// the parameters used for each test images is placed here
 	String one("1");
 	String two("2");
 	String three("3");
-	String four("4");
-	String five("5");
 	if (one.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage1c.jpg";
-	    ANGLESTEP = 3.0;
-	    PSTEP = 3.0;
+	    ANGLESTEP = 8.0;
+	    PSTEP = 6.0;
 	    ACCU_THRESHOLD = 100;
 	    CLOSENESS = 0.02;
 	    STANDARD_DEVIATION = 100;
 	    GRADIENT_THRESHOLD = 30;
-	    PARALLELOGRAM_THRESHOLD = 0.8;
+	    PARALLELOGRAM_THRESHOLD = 0.1;
 	} else if (two.compare(argv[1]) == 0) {
 	    imageName = "images/TestImage2c.jpg";
-	    ANGLESTEP = 3.0;
+	    ANGLESTEP = 5.0;
 	    PSTEP = 3.0;
 	    ACCU_THRESHOLD = 50;
-	    CLOSENESS = 0.05;
-	    STANDARD_DEVIATION = 500;
+	    CLOSENESS = 0.08;
+	    STANDARD_DEVIATION = 300;
 	    GRADIENT_THRESHOLD = 20;
 	    PARALLELOGRAM_THRESHOLD = 0.50;
 	} else if (three.compare(argv[1]) == 0) {
@@ -587,8 +532,8 @@ int main(int argc, char** argv)
 	    CLOSENESS = 0.45;
 	    STANDARD_DEVIATION = 125;
 	    GRADIENT_THRESHOLD = 25;
-	    PARALLELOGRAM_THRESHOLD = 0.60;
-	} else {
+	    PARALLELOGRAM_THRESHOLD = 0.70;
+	} else {   // default configuration
 	    imageName = argv[1];	
 	    ACCU_THRESHOLD = 20;
 	    CLOSENESS = 1;
@@ -628,14 +573,6 @@ int main(int argc, char** argv)
 	imshow("Display window", enhanced);
 	waitKey(0);
     }
-/*
-    Mat gaussian = Mat(enhanced.rows, enhanced.cols, CV_8UC1, 0.0);
-    GaussianBlur(enhanced, gaussian, Size(3, 3), 0, 0);
-    if (DISPLAY_IMAGE) {
-        imshow("Display window", gaussian);
-	waitKey(0);
-    }
-*/
     // Apply Sobel operator and display result
     Mat gradient = mySobel(enhanced);
     if (DISPLAY_IMAGE) {
@@ -650,11 +587,6 @@ int main(int argc, char** argv)
     }
     // Hough Transform
     vector<vector<pair<int, int> > > intersections = myHoughTransform(edges); 
-
-    // Detect Parallelogram
-//    vector<vector<pair<int, int> > > intersections = detectParallelogram(lines, edges);
-
-    // Display the parallelogram
     displayParallelogram(intersections, image);
 
     return 0;
