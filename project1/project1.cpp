@@ -16,6 +16,7 @@
 
 #define PI 3.1415926
 #define DISPLAY_IMAGE true
+#define WRITE_IMAGE false
 
 using namespace cv;
 using namespace std;
@@ -31,7 +32,7 @@ vector<vector<pair<int, int> > > detectParallelogram(unordered_map<double, vecto
 vector<pair<int,int> > checkIntersection(double theta1, int a1p1, int a1p2, double theta2, int a2p1, int a2p2, Mat edges, vector<pair<int,int> >* points); 
 bool findIntersection (double theta1, int p1, double theta2, int p2, vector<pair<int,int> > &intersection, Mat edges, Mat pointMat, vector<pair<int,int> >* points);
 bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges);
-void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image);
+Mat displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image);
 
 // global variables for detection parameters, initialize in main()
 int maxP;
@@ -141,15 +142,21 @@ Mat mySobel(Mat mat) {
 		}	    
 	    }
 	    // update min and max
-	    minM = min(minM, M.at(i).at(j));
-	    maxM = max(maxM, M.at(i).at(j));
+	    if (M.at(i).at(j) != 0) {
+		minM = min(minM, M.at(i).at(j));
+		maxM = max(maxM, M.at(i).at(j));
+	    }
 	}
     }
 
     // normalize magnitude values 
     for (int i = 1; i < nRows-1; i++) {
 	for (int j = 1; j < nCols-1; j++) {
-	    gradient.at<uchar>(i,j) = ((float) (M.at(i).at(j) - minM) / (float) (maxM-minM)) * 255;
+	    if (M.at(i).at(j) == 0) {
+		gradient.at<uchar>(i, j) = 0;
+	    } else {
+		gradient.at<uchar>(i,j) =(uchar) ((float) ((float) (M.at(i).at(j) - minM) / (float) (maxM-minM)) * 255);
+	    }
 	}
     }
     return gradient;
@@ -157,16 +164,17 @@ Mat mySobel(Mat mat) {
 
 /* This function performs thresholding on the given mat */
 Mat myThresholding(Mat mat, int threshold) {
+    Mat tmat = Mat(rows, cols, CV_8UC1, 0.0);
     for (int i = 0; i < mat.rows; i++) {
 	for (int j = 0; j < mat.cols; j++) {
 	    if (mat.at<uchar>(i,j)  > threshold) {
-		mat.at<uchar>(i,j) = 0;
+		tmat.at<uchar>(i,j) = 0;
 	    } else {
-		mat.at<uchar>(i,j) = 255;
+		tmat.at<uchar>(i,j) = 255;
 	    }
 	}
     }
-    return mat;
+    return tmat;
 }
 
 /* 
@@ -237,7 +245,7 @@ vector<vector<pair<int, int> > > myHoughTransform(Mat mat)
     }
     if (DISPLAY_IMAGE) {
         namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-	moveWindow("Display window 2", 20, 20);
+	moveWindow("Display window 2", 450, 20);
         imshow("Display window 2", lineMat);
 	waitKey(0);
     }
@@ -473,7 +481,7 @@ bool validateParallelogram(vector<pair<int, int> > intersection, Mat edges) {
  * Note that the order of the points matters.
  * The formed lines are (p1->p2, p2->p3, p3->p4, p4->p1).
  */
-void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image) {
+Mat displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat image) {
     Mat lineMat = image.clone();
     for (int i = 0; i < intersections.size(); i++) {
 	cout << "Coordinates of corners: {";
@@ -491,10 +499,7 @@ void displayParallelogram(vector<vector<pair<int, int> > > intersections, Mat im
 	}
 	cout << "}" << endl;
     }	    
-    namedWindow("Display window 2", WINDOW_AUTOSIZE); 
-    moveWindow("Display window 2", 20, 20);
-    imshow("Display window 2", lineMat);
-    waitKey(0);
+    return lineMat;
 }
 
 int main(int argc, char** argv) 
@@ -578,16 +583,29 @@ int main(int argc, char** argv)
     if (DISPLAY_IMAGE) {
         imshow("Display window", gradient);
 	waitKey(0);
+	if (WRITE_IMAGE) {
+	    imwrite(imageName.substr(0, imageName.find(".")) + "_gradient.jpg", gradient);
+	}
     }
     // Thresholding
     Mat edges = myThresholding(gradient, GRADIENT_THRESHOLD);
     if (DISPLAY_IMAGE) {
         imshow("Display window", edges);
 	waitKey(0);
+	if (WRITE_IMAGE) {
+	    imwrite(imageName.substr(0, imageName.find(".")) + "_edge.jpg", edges);
+	}
     }
-    // Hough Transform
+    // Parallelogram detection
     vector<vector<pair<int, int> > > intersections = myHoughTransform(edges); 
-    displayParallelogram(intersections, image);
+    Mat superimpose = displayParallelogram(intersections, image);
+    if (DISPLAY_IMAGE) {
+        imshow("Display window", superimpose);
+	waitKey(0);
+	if (WRITE_IMAGE) {
+	    imwrite(imageName.substr(0, imageName.find(".")) + "_parallelogram.jpg", superimpose);
+	}
+    }
 
     return 0;
 }
