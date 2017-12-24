@@ -1,0 +1,3 @@
+/home/sean/Desktop/parallelogram-detection/parallelogram/CMakeFiles/edit_cache.dir
+/home/sean/Desktop/parallelogram-detection/parallelogram/CMakeFiles/rebuild_cache.dir
+/home/sean/Desktop/parallelogram-detection/parallelogram/CMakeFiles/parallelogram.dir

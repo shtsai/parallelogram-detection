@@ -1,3 +1,0 @@
-/home/sean/Desktop/computervision/project1/CMakeFiles/edit_cache.dir
-/home/sean/Desktop/computervision/project1/CMakeFiles/rebuild_cache.dir
-/home/sean/Desktop/computervision/project1/CMakeFiles/project1.dir
