@@ -1,6 +1,6 @@
 ## Parallelograms Detection
 
-**1.**
+**A. Introduction**
 
 The way I detect parallelogram is as follow:
 
@@ -25,7 +25,7 @@ The way I detect parallelogram is as follow:
 This is just a simple parallelogram detector, and it is not very robust when dealing with more
 complicated image.
 
-**2.**
+**B. Compilation and Run**
 
 The programming language I used is C++.
 
@@ -37,28 +37,34 @@ In the parallelogram/ folder, you can see an executable “parallelogram”. You
 file with an argument to specify which image you want to use. The test images are already
 included by default (in the images/ folder). For example, to run the program on second test
 image, type:
+```
 ./parallelogram 2
+```
+
 You can also specify a file path as the argument.
 
 If you modify the code and want to recompile, type:
+```
 make
+```
+
 If it doesn’t work, you might want to modify the CMakeLists.txt and do:
-cmake.
+```
+cmake .
+```
 
+**3. Example**
 
-**3.**
-
-**Image 1**
 Original image
 ![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c.jpg "Original image")
 
 Normalized gradient magnitude (as a grayscale image)
-![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_gradient.jpg "Original image")
+![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_gradient.jpg "Gradient magnitude")
 
 Edge map after thresholding. Threshold value used is 30.
-![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_edge.jpg "Original image")
+![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_edge.jpg "Edge map")
 
 Original image with the detected parallelograms superimposed on it.
-![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_parallelogram.jpg "Original image")
+![alt text](https://github.com/shtsai7/parallelogram-detection/blob/master/parallelogram/images/TestImage1c_parallelogram.jpg "Detected parallelogram")
 
 You can see that detected parallelogram does not fits perfectly with the original image. This is because the left side and right side of the parallelogram in the original image are not perfectly parallel to each other. Therefore, I used an angle step size of 8 and p value step size of 6. The displayed result is an approximation of the detected parallelogram.
